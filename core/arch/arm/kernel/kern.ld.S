@@ -207,12 +207,30 @@ SECTIONS
 		__extab_end = .;
 	}
 
+
+/* Keep all kernel data on separate page */
+#ifdef CFG_VIRTUALIZATION
+	. = ALIGN(SMALL_PAGE_SIZE);
+/* TODO: Move it back, create separate mapping for kernel */
+	__flatmap_unpg_ro_size = . - __flatmap_unpg_ro_start;
+	__flatmap_unpg_rw_start = .;
+	.kdata : ALIGN(8) {
+		*(.kdata .kdata.*)
+	}
+	.bss : ALIGN(8) {
+		*(.kbss .kbss.*)
+	}
+	.kheap (NOLOAD) : {
+	       __kheap_start = .;
+	       . += CFG_CORE_HEAP_SIZE;
+	       __kheap_end = .;
+	}
+#endif
+
 	/* Start page aligned read-write memory */
 #ifdef CFG_CORE_RWDATA_NOEXEC
 	. = ALIGN(SMALL_PAGE_SIZE);
 #endif
-	__flatmap_unpg_ro_size = . - __flatmap_unpg_ro_start;
-	__flatmap_unpg_rw_start = .;
 
 	.data : ALIGN(8) {
 		/* writable data  */
