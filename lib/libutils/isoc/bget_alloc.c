@@ -88,6 +88,7 @@
 				   pool space control.  */
 #endif
 
+
 #ifdef MEM_DEBUG
 #undef NDEBUG
 #define DumpData    1
@@ -100,7 +101,7 @@
 #endif
 
 #include <compiler.h>
-#include <malloc.h>
+#include "bget_alloc.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -114,14 +115,14 @@
 #include <kernel/thread.h>
 #include <kernel/spinlock.h>
 
-static uint32_t malloc_lock(void)
+static uint32_t alloc_lock(struct bget_poolset *poolset)
 {
-	return cpu_spin_lock_xsave(&__malloc_spinlock);
+	return cpu_spin_lock_xsave(&poolset->lock);
 }
 
-static void malloc_unlock(uint32_t exceptions)
+static void alloc_unlock(uint32_t exceptions, struct bget_poolset *poolset)
 {
-	cpu_spin_unlock_xrestore(&__malloc_spinlock, exceptions);
+	cpu_spin_unlock_xrestore(&poolset->lock, exceptions);
 }
 
 static void tag_asan_free(void *buf, size_t len)
@@ -141,12 +142,13 @@ static void *memset_unchecked(void *s, int c, size_t n)
 
 #else /*__KERNEL__*/
 /* Compiling for TA */
-static uint32_t malloc_lock(void)
+static uint32_t alloc_lock(struct bget_poolset *poolset __unused)
 {
 	return 0;
 }
 
-static void malloc_unlock(uint32_t exceptions __unused)
+static void alloc_unlock(uint32_t exceptions __unused,
+			 struct bget_poolset *poolset __unused)
 {
 }
 
@@ -167,70 +169,63 @@ static void *memset_unchecked(void *s, int c, size_t n)
 
 #include "bget.c"		/* this is ugly, but this is bget */
 
-struct malloc_pool {
-	void *buf;
-	size_t len;
-};
-
-static struct malloc_pool *malloc_pool;
-static size_t malloc_pool_len;
-
 #ifdef BufStats
 
-static struct malloc_stats mstats;
-
-static void raw_malloc_return_hook(void *p, size_t requested_size)
+static void raw_alloc_return_hook(void *p, size_t requested_size,
+				  struct bget_poolset *poolset)
 {
-	if (totalloc > mstats.max_allocated)
-		mstats.max_allocated = totalloc;
+	if (totalloc > poolset->mstats.max_allocated)
+		poolset->mstats.max_allocated = totalloc;
 
 	if (!p) {
-		mstats.num_alloc_fail++;
-		if (requested_size > mstats.biggest_alloc_fail) {
-			mstats.biggest_alloc_fail = requested_size;
-			mstats.biggest_alloc_fail_used = totalloc;
+		poolset->mstats.num_alloc_fail++;
+		if (requested_size > poolset->mstats.biggest_alloc_fail) {
+			poolset->mstats.biggest_alloc_fail = requested_size;
+			poolset->mstats.biggest_alloc_fail_used = totalloc;
 		}
 	}
 }
 
-void malloc_reset_stats(void)
+void bget_malloc_reset_stats(struct bget_poolset *poolset)
 {
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = alloc_lock(poolset);
 
-	mstats.max_allocated = 0;
-	mstats.num_alloc_fail = 0;
-	mstats.biggest_alloc_fail = 0;
-	mstats.biggest_alloc_fail_used = 0;
-	malloc_unlock(exceptions);
+	poolset->mstats.max_allocated = 0;
+	poolset->mstats.num_alloc_fail = 0;
+	poolset->mstats.biggest_alloc_fail = 0;
+	poolset->mstats.biggest_alloc_fail_used = 0;
+	alloc_unlock(exceptions, poolset);
 }
 
-void malloc_get_stats(struct malloc_stats *stats)
+void bget_malloc_get_stats(struct bget_malloc_stats *stats,
+			   struct bget_poolset *poolset)
 {
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = alloc_lock(poolset);
 
-	memcpy(stats, &mstats, sizeof(*stats));
+	memcpy(stats, &poolset->mstats, sizeof(*stats));
 	stats->allocated = totalloc;
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions, poolset);
 }
 
 #else /* BufStats */
 
-static void raw_malloc_return_hook(void *p __unused, size_t requested_size __unused)
+static void raw_alloc_return_hook(void *p __unused, size_t requested_size __unused,
+	struct bget_poolset *poolset __unused)
 {
 }
 
 #endif /* BufStats */
 
 #ifdef BufValid
-static void raw_malloc_validate_pools(void)
+static void raw_alloc_validate_pools(struct bget_poolset *poolset)
 {
 	size_t n;
 
-	for (n = 0; n < malloc_pool_len; n++)
-		bpoolv(malloc_pool[n].buf);
+	for (n = 0; n < alloc_pool_len; n++)
+		bpoolv(alloc_pool[n].buf, poolset);
 }
 #else
-static void raw_malloc_validate_pools(void)
+static void raw_alloc_validate_pools(struct bget_poolset *poolset __unused)
 {
 }
 #endif
@@ -240,14 +235,15 @@ struct bpool_iterator {
 	size_t pool_idx;
 };
 
-static void bpool_foreach_iterator_init(struct bpool_iterator *iterator)
+static void bpool_foreach_iterator_init(struct bpool_iterator *iterator,
+					struct bget_poolset *poolset)
 {
 	iterator->pool_idx = 0;
-	iterator->next_buf = BFH(malloc_pool[0].buf);
+	iterator->next_buf = BFH(poolset->alloc_pool[0].buf);
 }
 
 static bool bpool_foreach_pool(struct bpool_iterator *iterator, void **buf,
-		size_t *len, bool *isfree)
+			       size_t *len, bool *isfree)
 {
 	struct bfhead *b = iterator->next_buf;
 	bufsize bs = b->bh.bsize;
@@ -276,7 +272,8 @@ static bool bpool_foreach_pool(struct bpool_iterator *iterator, void **buf,
 	return true;
 }
 
-static bool bpool_foreach(struct bpool_iterator *iterator, void **buf)
+static bool bpool_foreach(struct bpool_iterator *iterator, void **buf,
+			  struct bget_poolset *poolset)
 {
 	while (true) {
 		size_t len;
@@ -288,11 +285,12 @@ static bool bpool_foreach(struct bpool_iterator *iterator, void **buf)
 			return true;
 		}
 
-		if ((iterator->pool_idx + 1) >= malloc_pool_len)
+		if ((iterator->pool_idx + 1) >= poolset->pool_len)
 			return false;
 
 		iterator->pool_idx++;
-		iterator->next_buf = BFH(malloc_pool[iterator->pool_idx].buf);
+		iterator->next_buf =
+			BFH(poolset->alloc_pool[iterator->pool_idx].buf);
 	}
 }
 
@@ -301,19 +299,20 @@ static bool bpool_foreach(struct bpool_iterator *iterator, void **buf)
 		for (bpool_foreach_iterator_init((iterator)); \
 			bpool_foreach((iterator), (bp));)
 
-static void *raw_malloc(size_t hdr_size, size_t ftr_size, size_t pl_size)
+static void *raw_alloc(size_t hdr_size, size_t ftr_size, size_t pl_size,
+		       struct bget_poolset *poolset)
 {
 	void *ptr = NULL;
 	size_t s = hdr_size + ftr_size + pl_size;
 
 	/*
-	 * Make sure that malloc has correct alignment of returned buffers.
+	 * Make sure that alloc has correct alignment of returned buffers.
 	 * The assumption is that uintptr_t will be as wide as the largest
 	 * required alignment of any type.
 	 */
 	COMPILE_TIME_ASSERT(SizeQuant >= sizeof(uintptr_t));
 
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools(poolset);
 
 	/* Check wrapping */
 	if (s < pl_size)
@@ -323,28 +322,28 @@ static void *raw_malloc(size_t hdr_size, size_t ftr_size, size_t pl_size)
 	if (!s)
 		s++;
 
-	ptr = bget(s);
+	ptr = bget(s, poolset);
 out:
-	raw_malloc_return_hook(ptr, pl_size);
+	raw_alloc_return_hook(ptr, pl_size, poolset);
 
 	return ptr;
 }
 
-static void raw_free(void *ptr)
+static void raw_free(void *ptr, struct bget_poolset *poolset)
 {
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools(poolset);
 
 	if (ptr)
-		brel(ptr);
+		brel(ptr, poolset);
 }
 
 static void *raw_calloc(size_t hdr_size, size_t ftr_size, size_t pl_nmemb,
-		size_t pl_size)
+			size_t pl_size, struct bget_poolset *poolset)
 {
 	size_t s = hdr_size + ftr_size + pl_nmemb * pl_size;
 	void *ptr = NULL;
 
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools(poolset);
 
 	/* Check wrapping */
 	if (s < pl_nmemb || s < pl_size)
@@ -354,15 +353,15 @@ static void *raw_calloc(size_t hdr_size, size_t ftr_size, size_t pl_nmemb,
 	if (!s)
 		s++;
 
-	ptr = bgetz(s);
+	ptr = bgetz(s, poolset);
 out:
-	raw_malloc_return_hook(ptr, pl_nmemb * pl_size);
+	raw_alloc_return_hook(ptr, pl_nmemb * pl_size, poolset);
 
 	return ptr;
 }
 
 static void *raw_realloc(void *ptr, size_t hdr_size, size_t ftr_size,
-		size_t pl_size)
+			 size_t pl_size, struct bget_poolset *poolset)
 {
 	size_t s = hdr_size + ftr_size + pl_size;
 	void *p = NULL;
@@ -371,20 +370,21 @@ static void *raw_realloc(void *ptr, size_t hdr_size, size_t ftr_size,
 	if (s < pl_size)
 		goto out;
 
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools(poolset);
 
 	/* BGET doesn't like 0 sized allocations */
 	if (!s)
 		s++;
 
-	p = bgetr(ptr, s);
+	p = bgetr(ptr, s, poolset);
 out:
-	raw_malloc_return_hook(p, pl_size);
+	raw_alloc_return_hook(p, pl_size, poolset);
 
 	return p;
 }
 
-static void create_free_block(struct bfhead *bf, bufsize size, struct bhead *bn)
+static void create_free_block(struct bfhead *bf, bufsize size, struct bhead *bn,
+			      struct bfhead *freelist)
 {
 	assert(BH((char *)bf + size) == bn);
 	assert(bn->bsize < 0); /* Next block should be allocated */
@@ -399,15 +399,16 @@ static void create_free_block(struct bfhead *bf, bufsize size, struct bhead *bn)
 	bn->prevfree = size;
 
 	/* Insert the free buffer on the free list */
-	assert(freelist.ql.blink->ql.flink == &freelist);
-	assert(freelist.ql.flink->ql.blink == &freelist);
-	bf->ql.flink = &freelist;
-	bf->ql.blink = freelist.ql.blink;
-	freelist.ql.blink = bf;
+	assert(freelist->ql.blink->ql.flink == freelist);
+	assert(freelist->ql.flink->ql.blink == freelist);
+	bf->ql.flink = freelist;
+	bf->ql.blink = freelist->ql.blink;
+	freelist->ql.blink = bf;
 	bf->ql.blink->ql.flink = bf;
 }
 
-static void brel_before(char *orig_buf, char *new_buf)
+static void brel_before(char *orig_buf, char *new_buf,
+			struct bget_poolset *poolset)
 {
 	struct bfhead *bf;
 	struct bhead *b;
@@ -448,7 +449,7 @@ static void brel_before(char *orig_buf, char *new_buf)
 		/* Make it negative since it's an allocated buffer */
 		b->bsize = -(orig_size - size);
 
-		create_free_block(bf, size, b);
+		create_free_block(bf, size, b, (void*)poolset);
 	}
 
 #ifdef BufStats
@@ -457,7 +458,7 @@ static void brel_before(char *orig_buf, char *new_buf)
 #endif
 }
 
-static void brel_after(char *buf, bufsize size)
+static void brel_after(char *buf, bufsize size, struct bget_poolset *poolset)
 {
 	struct bhead *b = BH(buf - sizeof(struct bhead));
 	struct bhead *bn;
@@ -520,7 +521,8 @@ static void brel_after(char *buf, bufsize size)
 		nbf->ql.flink->ql.blink = nbf;
 	} else {
 		/* New buffer is allocated, create a new free buffer */
-		create_free_block(BFH((char *)b + new_size), free_size, bn);
+		create_free_block(BFH((char *)b + new_size), free_size, bn,
+				  (void*)poolset);
 	}
 
 #ifdef BufStats
@@ -531,22 +533,22 @@ static void brel_after(char *buf, bufsize size)
 }
 
 static void *raw_memalign(size_t hdr_size, size_t ftr_size, size_t alignment,
-		size_t size)
+			  size_t size, struct bget_poolset *poolset)
 {
 	size_t s;
 	uintptr_t b;
 
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools(poolset);
 
 	if (!IS_POWER_OF_TWO(alignment))
 		return NULL;
 
 	/*
-	 * Normal malloc with headers always returns something SizeQuant
+	 * Normal alloc with headers always returns something SizeQuant
 	 * aligned.
 	 */
 	if (alignment <= SizeQuant)
-		return raw_malloc(hdr_size, ftr_size, size);
+		return raw_alloc(hdr_size, ftr_size, size, poolset);
 
 	s = hdr_size + ftr_size + alignment + size +
 	    SizeQ + sizeof(struct bhead);
@@ -555,7 +557,7 @@ static void *raw_memalign(size_t hdr_size, size_t ftr_size, size_t alignment,
 	if (s < alignment || s < size)
 		return NULL;
 
-	b = (uintptr_t)bget(s);
+	b = (uintptr_t)bget(s, poolset);
 	if (!b)
 		goto out;
 
@@ -580,7 +582,7 @@ static void *raw_memalign(size_t hdr_size, size_t ftr_size, size_t alignment,
 		assert((p + hdr_size + ftr_size + size) <= (b + s));
 
 		/* Free the front part of the buffer */
-		brel_before((void *)b, (void *)p);
+		brel_before((void *)b, (void *)p, poolset);
 
 		/* Set the new start of the buffer */
 		b = p;
@@ -590,9 +592,9 @@ static void *raw_memalign(size_t hdr_size, size_t ftr_size, size_t alignment,
 	 * Since b is now aligned, release what we don't need at the end of
 	 * the buffer.
 	 */
-	brel_after((void *)b, hdr_size + ftr_size + size);
+	brel_after((void *)b, hdr_size + ftr_size + size, poolset);
 out:
-	raw_malloc_return_hook((void *)b, size);
+	raw_alloc_return_hook((void *)b, size, poolset);
 
 	return (void *)b;
 }
@@ -665,28 +667,28 @@ static void mdbg_update_hdr(struct mdbg_hdr *hdr, const char *fname,
 	*footer = MDBG_FOOTER_MAGIC;
 }
 
-void *mdbg_malloc(const char *fname, int lineno, size_t size)
+void *mdbg_alloc(const char *fname, int lineno, size_t size)
 {
 	struct mdbg_hdr *hdr;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	/*
 	 * Check struct mdbg_hdr doesn't get bad alignment.
 	 * This is required by C standard: the buffer returned from
-	 * malloc() should be aligned with a fundamental alignment.
+	 * alloc() should be aligned with a fundamental alignment.
 	 * For ARM32, the required alignment is 8. For ARM64, it is 16.
 	 */
 	COMPILE_TIME_ASSERT(
 		(sizeof(struct mdbg_hdr) % (__alignof(uintptr_t) * 2)) == 0);
 
-	hdr = raw_malloc(sizeof(struct mdbg_hdr),
+	hdr = raw_alloc(sizeof(struct mdbg_hdr),
 			  mdbg_get_ftr_size(size), size);
 	if (hdr) {
 		mdbg_update_hdr(hdr, fname, lineno, size);
 		hdr++;
 	}
 
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return hdr;
 }
 
@@ -711,16 +713,16 @@ static void mdbg_free(void *ptr)
 
 void free(void *ptr)
 {
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	mdbg_free(ptr);
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 }
 
 void *mdbg_calloc(const char *fname, int lineno, size_t nmemb, size_t size)
 {
 	struct mdbg_hdr *hdr;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	hdr = raw_calloc(sizeof(struct mdbg_hdr),
 			  mdbg_get_ftr_size(nmemb * size), nmemb, size);
@@ -728,7 +730,7 @@ void *mdbg_calloc(const char *fname, int lineno, size_t nmemb, size_t size)
 		mdbg_update_hdr(hdr, fname, lineno, nmemb * size);
 		hdr++;
 	}
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return hdr;
 }
 
@@ -753,10 +755,10 @@ static void *mdbg_realloc_unlocked(const char *fname, int lineno,
 void *mdbg_realloc(const char *fname, int lineno, void *ptr, size_t size)
 {
 	void *p;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	p = mdbg_realloc_unlocked(fname, lineno, ptr, size);
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return p;
 }
 
@@ -767,7 +769,7 @@ void *mdbg_memalign(const char *fname, int lineno, size_t alignment,
 		size_t size)
 {
 	struct mdbg_hdr *hdr;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	hdr = raw_memalign(sizeof(struct mdbg_hdr), mdbg_get_ftr_size(size),
 			   alignment, size);
@@ -775,7 +777,7 @@ void *mdbg_memalign(const char *fname, int lineno, size_t alignment,
 		mdbg_update_hdr(hdr, fname, lineno, size);
 		hdr++;
 	}
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return hdr;
 }
 
@@ -793,9 +795,9 @@ void mdbg_check(int bufdump)
 {
 	struct bpool_iterator itr;
 	void *b;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools();
 
 	BPOOL_FOREACH(&itr, &b) {
 		struct mdbg_hdr *hdr = (struct mdbg_hdr *)b;
@@ -813,36 +815,36 @@ void mdbg_check(int bufdump)
 		}
 	}
 
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 }
 
 #else
 
-void *malloc(size_t size)
+void *bget_alloc(size_t size)
 {
 	void *p;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
-	p = raw_malloc(0, 0, size);
-	malloc_unlock(exceptions);
+	p = raw_alloc(0, 0, size);
+	alloc_unlock(exceptions);
 	return p;
 }
 
-void free(void *ptr)
+void bget_free(void *ptr)
 {
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	raw_free(ptr);
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 }
 
-void *calloc(size_t nmemb, size_t size)
+void *bget_calloc(size_t nmemb, size_t size)
 {
 	void *p;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	p = raw_calloc(0, 0, nmemb, size);
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return p;
 }
 
@@ -851,23 +853,23 @@ static void *realloc_unlocked(void *ptr, size_t size)
 	return raw_realloc(ptr, 0, 0, size);
 }
 
-void *realloc(void *ptr, size_t size)
+void *bget_realloc(void *ptr, size_t size)
 {
 	void *p;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	p = realloc_unlocked(ptr, size);
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return p;
 }
 
-void *memalign(size_t alignment, size_t size)
+void *bget_memalign(size_t alignment, size_t size)
 {
 	void *p;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
 	p = raw_memalign(0, 0, alignment, size);
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return p;
 }
 
@@ -879,14 +881,14 @@ static void *get_payload_start_size(void *ptr, size_t *size)
 
 #endif
 
-void malloc_add_pool(void *buf, size_t len)
+void alloc_add_pool(void *buf, size_t len)
 {
 	void *p;
 	size_t l;
 	uint32_t exceptions;
 	uintptr_t start = (uintptr_t)buf;
 	uintptr_t end = start + len;
-	const size_t min_len = ((sizeof(struct malloc_pool) + (SizeQuant - 1)) &
+	const size_t min_len = ((sizeof(struct alloc_pool) + (SizeQuant - 1)) &
 					(~(SizeQuant - 1))) +
 				sizeof(struct bhead) * 2;
 
@@ -900,32 +902,32 @@ void malloc_add_pool(void *buf, size_t len)
 		return;
 	}
 
-	exceptions = malloc_lock();
+	exceptions = allock_lock(&poolset->lock);
 	tag_asan_free((void *)start, end - start);
 	bpool((void *)start, end - start);
-	l = malloc_pool_len + 1;
-	p = realloc_unlocked(malloc_pool, sizeof(struct malloc_pool) * l);
+	l = alloc_pool_len + 1;
+	p = realloc_unlocked(alloc_pool, sizeof(struct alloc_pool) * l);
 	assert(p);
-	malloc_pool = p;
-	malloc_pool[malloc_pool_len].buf = (void *)start;
-	malloc_pool[malloc_pool_len].len = end - start;
+	alloc_pool = p;
+	alloc_pool[alloc_pool_len].buf = (void *)start;
+	alloc_pool[alloc_pool_len].len = end - start;
 #ifdef BufStats
-	mstats.size += malloc_pool[malloc_pool_len].len;
+	mstats.size += alloc_pool[alloc_pool_len].len;
 #endif
-	malloc_pool_len = l;
-	malloc_unlock(exceptions);
+	alloc_pool_len = l;
+	alloc_unlock(exceptions);
 }
 
-bool malloc_buffer_is_within_alloced(void *buf, size_t len)
+bool alloc_buffer_is_within_alloced(void *buf, size_t len)
 {
 	struct bpool_iterator itr;
 	void *b;
 	uint8_t *start_buf = buf;
 	uint8_t *end_buf = start_buf + len;
 	bool ret = false;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools();
 
 	/* Check for wrapping */
 	if (start_buf > end_buf)
@@ -946,24 +948,24 @@ bool malloc_buffer_is_within_alloced(void *buf, size_t len)
 	}
 
 out:
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 
 	return ret;
 }
 
-bool malloc_buffer_overlaps_heap(void *buf, size_t len)
+bool alloc_buffer_overlaps_heap(void *buf, size_t len)
 {
 	uintptr_t buf_start = (uintptr_t) buf;
 	uintptr_t buf_end = buf_start + len;
 	size_t n;
 	bool ret = false;
-	uint32_t exceptions = malloc_lock();
+	uint32_t exceptions = allock_lock(&poolset->lock);
 
-	raw_malloc_validate_pools();
+	raw_alloc_validate_pools();
 
-	for (n = 0; n < malloc_pool_len; n++) {
-		uintptr_t pool_start = (uintptr_t)malloc_pool[n].buf;
-		uintptr_t pool_end = pool_start + malloc_pool[n].len;
+	for (n = 0; n < alloc_pool_len; n++) {
+		uintptr_t pool_start = (uintptr_t)alloc_pool[n].buf;
+		uintptr_t pool_end = pool_start + alloc_pool[n].len;
 
 		if (buf_start > buf_end || pool_start > pool_end) {
 			ret = true;	/* Wrapping buffers, shouldn't happen */
@@ -977,6 +979,6 @@ bool malloc_buffer_overlaps_heap(void *buf, size_t len)
 	}
 
 out:
-	malloc_unlock(exceptions);
+	alloc_unlock(exceptions);
 	return ret;
 }

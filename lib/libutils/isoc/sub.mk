@@ -1,12 +1,11 @@
 global-incdirs-y += include
 
-srcs-y += bget_malloc.c
-cflags-remove-bget_malloc.c-y += -Wold-style-definition -Wredundant-decls
-cflags-bget_malloc.c-y += -Wno-sign-compare -Wno-cast-align
+srcs-y += bget_alloc.c
+cflags-remove-bget_alloc.c-y += -Wold-style-definition -Wredundant-decls
+cflags-bget_alloc.c-y += -Wno-sign-compare -Wno-cast-align
 ifeq ($(sm),core)
-cflags-remove-bget_malloc.c-y += $(cflags_kasan)
+cflags-remove-bget_alloc.c-y += $(cflags_kasan)
 endif
-srcs-y += malloc_lock.c
 
 srcs-y += snprintf.c
 

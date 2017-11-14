@@ -26,16 +26,17 @@
 #endif
 
 typedef long bufsize;
-void	bpool	    _((void *buffer, bufsize len));
-void   *bget	    _((bufsize size));
-void   *bgetz	    _((bufsize size));
-void   *bgetr	    _((void *buffer, bufsize newsize));
-void	brel	    _((void *buf));
+
+void	bpool	    _((void *buffer, bufsize len, void *poolset));
+void   *bget	    _((bufsize size, void *poolset));
+void   *bgetz	    _((bufsize size, void *poolset));
+void   *bgetr	    _((void *buffer, bufsize newsize, void *poolset));
+void	brel	    _((void *buf, void *poolset));
 void	bectl	    _((int (*compact)(bufsize sizereq, int sequence),
 		       void *(*acquire)(bufsize size),
 		       void (*release)(void *buf), bufsize pool_incr));
 void	bstats	    _((bufsize *curalloc, bufsize *totfree, bufsize *maxfree,
-		       long *nget, long *nrel));
+		       long *nget, long *nrel, void *poolset));
 void	bstatse     _((bufsize *pool_incr, long *npool, long *npget,
 		       long *nprel, long *ndget, long *ndrel));
 void	bufdump     _((void *buf));
