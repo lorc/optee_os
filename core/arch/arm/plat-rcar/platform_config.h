@@ -31,21 +31,28 @@
 /* Make stacks aligned to data cache line length */
 #define STACK_ALIGNMENT		64
 
-#ifdef ARM64
-#ifdef CFG_WITH_PAGER
-#error "Pager not supported for ARM64"
-#endif
-#endif /*ARM64*/
-
 #define GIC_BASE		0xF1000000
 #define GICC_BASE		0xF1020000
 #define GICD_BASE		0xF1010000
 
 #define CONSOLE_UART_BASE	0xE6E88000
 
+#ifdef CFG_WITH_PAGER
+
+/* Emulated SRAM */
+#define TZSRAM_BASE	        0x44100000
+#define TZSRAM_SIZE		(768*1024)
+
+#define TZDRAM_BASE		(TZSRAM_BASE + TZSRAM_SIZE)
+#define TZDRAM_SIZE		(0x03D00000 - TZSRAM_SIZE)
+
+#else /*CFG_WITH_PAGER*/
+
 /* Location of trusted dram */
 #define TZDRAM_BASE		0x44000000
 #define TZDRAM_SIZE		0x03E00000
+
+#endif	/* CFG_WITH_PAGER */
 
 #if defined(PLATFORM_FLAVOR_salvator_h3)
 #define CFG_TEE_CORE_NB_CORE	8
@@ -71,7 +78,7 @@
 #define CFG_SHMEM_START		(TZDRAM_BASE + TZDRAM_SIZE)
 #define CFG_SHMEM_SIZE		0x100000
 
-#define CFG_TEE_RAM_VA_SIZE	(1024 * 1024)
+#define CFG_TEE_RAM_VA_SIZE	(1536 * 1024)
 
 #ifndef CFG_TEE_LOAD_ADDR
 #define CFG_TEE_LOAD_ADDR	CFG_TEE_RAM_START
@@ -85,9 +92,15 @@
  * |        | TA_RAM  |
  * +--------+---------+
  */
+#ifdef CFG_WITH_PAGER
+#define CFG_TEE_RAM_PH_SIZE	(TZSRAM_SIZE)
+#define CFG_TEE_RAM_START	(TZSRAM_BASE)
+#define MAX_XLAT_TABLES		10
+#else
 #define CFG_TEE_RAM_PH_SIZE	CFG_TEE_RAM_VA_SIZE
 #define CFG_TEE_RAM_START	(TZDRAM_BASE + 0x00100000)
-#define CFG_TA_RAM_START	ROUNDUP((CFG_TEE_RAM_START + \
+#endif
+#define CFG_TA_RAM_START	ROUNDUP((CFG_TEE_RAM_START +  \
 					CFG_TEE_RAM_VA_SIZE), \
 					CORE_MMU_DEVICE_SIZE)
 #define CFG_TA_RAM_SIZE		ROUNDDOWN((TZDRAM_SIZE - CFG_TEE_RAM_VA_SIZE), \
