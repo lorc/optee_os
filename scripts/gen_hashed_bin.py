@@ -145,6 +145,10 @@ def get_args():
 		required=False, type=argparse.FileType('wb'), \
 		help='The output tee_pageable_v2.bin')
 
+	parser.add_argument('--out_whole_v2', \
+		required=False, type=argparse.FileType('wb'), \
+		help='The output tee_whole_v2.bin')
+
 	return parser.parse_args();
 
 def main():
@@ -191,6 +195,15 @@ def main():
 
 	if args.out_pageable_v2 is not None:
 		outf = args.out_pageable_v2
+		append_to(outf, init_bin_size, tee_pageable_fname)
+		outf.close()
+
+        if args.out_whole_v2 is not None:
+		outf = args.out_whole_v2
+                write_header_v2(outf, init_size, args, paged_size)
+		append_to(outf, 0, tee_pager_fname)
+		append_to(outf, 0, tee_pageable_fname, init_bin_size)
+		append_hashes(outf, tee_pageable_fname)
 		append_to(outf, init_bin_size, tee_pageable_fname)
 		outf.close()
 
