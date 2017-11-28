@@ -241,6 +241,11 @@ cleanfiles += $(link-out-dir)/tee-pageable_v2.bin
 $(link-out-dir)/tee-pageable_v2.bin: $(gen_hash_bin_deps)
 	$(gen_hash_bin_cmd) --out_pageable_v2 $@
 
+all: $(link-out-dir)/tee-whole_v2.bin
+cleanfiles += $(link-out-dir)/tee-whole_v2.bin
+$(link-out-dir)/tee-whole_v2.bin: $(gen_hash_bin_deps)
+	$(gen_hash_bin_cmd) --out_whole_v2 $@
+
 all: $(link-out-dir)/tee.symb_sizes
 cleanfiles += $(link-out-dir)/tee.symb_sizes
 $(link-out-dir)/tee.symb_sizes: $(link-out-dir)/tee.elf
