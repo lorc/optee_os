@@ -36,6 +36,7 @@
 #include <tee/entry_fast.h>
 #include <drivers/scif.h>
 #include <drivers/gic.h>
+#include <keep.h>
 
 register_phys_mem(MEM_AREA_IO_SEC, CONSOLE_UART_BASE, SCIF_REG_SIZE);
 register_phys_mem(MEM_AREA_IO_SEC, GICD_BASE, GIC_DIST_REG_SIZE);
@@ -81,3 +82,4 @@ void console_init(void)
 	scif_uart_init(&console_data, CONSOLE_UART_BASE);
 	register_serial_console(&console_data.chip);
 }
+KEEP_PAGER(console_init);
