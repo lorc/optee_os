@@ -61,7 +61,7 @@ typedef struct _tee_mm_pool_t tee_mm_pool_t;
 extern tee_mm_pool_t tee_mm_sec_ddr;
 
 /* Virtual eSRAM pool */
-extern tee_mm_pool_t tee_mm_vcore;
+extern tee_mm_pool_t kernel_mm_vcore;
 
 /* Shared memory pool */
 extern tee_mm_pool_t tee_mm_shm;

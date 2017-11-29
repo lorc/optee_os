@@ -386,7 +386,7 @@ static void init_runtime(unsigned long pageable_part)
 	 * Initialize the virtual memory pool used for main_mmu_l2_ttb which
 	 * is supplied to tee_pager_init() below.
 	 */
-	init_vcore(&tee_mm_vcore);
+	init_vcore(&kernel_mm_vcore);
 
 	/*
 	 * Assign alias area for pager end of the small page block the rest
@@ -394,8 +394,8 @@ static void init_runtime(unsigned long pageable_part)
 	 * we're guaranteed to not need more than the physical amount of
 	 * TZSRAM.
 	 */
-	mm = tee_mm_alloc2(&tee_mm_vcore,
-		(vaddr_t)tee_mm_vcore.hi - TZSRAM_SIZE, TZSRAM_SIZE);
+	mm = tee_mm_alloc2(&kernel_mm_vcore,
+		(vaddr_t)kernel_mm_vcore.hi - TZSRAM_SIZE, TZSRAM_SIZE);
 	assert(mm);
 	tee_pager_init(mm);
 
@@ -403,7 +403,7 @@ static void init_runtime(unsigned long pageable_part)
 	 * Claim virtual memory which isn't paged.
 	 * Linear memory (flat map core memory) ends there.
 	 */
-	mm = tee_mm_alloc2(&tee_mm_vcore, VCORE_UNPG_RX_PA,
+	mm = tee_mm_alloc2(&kernel_mm_vcore, VCORE_UNPG_RX_PA,
 			   (vaddr_t)(__pageable_start - VCORE_UNPG_RX_PA));
 	assert(mm);
 
@@ -411,7 +411,7 @@ static void init_runtime(unsigned long pageable_part)
 	 * Allocate virtual memory for the pageable area and let the pager
 	 * take charge of all the pages already assigned to that memory.
 	 */
-	mm = tee_mm_alloc2(&tee_mm_vcore, (vaddr_t)__pageable_start,
+	mm = tee_mm_alloc2(&kernel_mm_vcore, (vaddr_t)__pageable_start,
 			   pageable_size);
 	assert(mm);
 	tee_pager_add_core_area(tee_mm_get_smem(mm), tee_mm_get_bytes(mm),

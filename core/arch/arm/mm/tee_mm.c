@@ -352,7 +352,7 @@ bool tee_mm_is_empty(tee_mm_pool_t *pool)
 tee_mm_pool_t tee_mm_sec_ddr;
 
 /* Virtual eSRAM pool */
-tee_mm_pool_t tee_mm_vcore;
+tee_mm_pool_t kernel_mm_vcore;
 
 /* Shared memory pool */
 tee_mm_pool_t tee_mm_shm;

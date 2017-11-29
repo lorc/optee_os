@@ -1692,7 +1692,7 @@ void *tee_pager_alloc(size_t size, uint32_t flags)
 	if (!size)
 		return NULL;
 
-	mm = tee_mm_alloc(&tee_mm_vcore, ROUNDUP(size, SMALL_PAGE_SIZE));
+	mm = tee_mm_alloc(&kernel_mm_vcore, ROUNDUP(size, SMALL_PAGE_SIZE));
 	if (!mm)
 		return NULL;
 

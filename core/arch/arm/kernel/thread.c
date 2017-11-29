@@ -853,7 +853,7 @@ static void init_thread_stacks(void)
 		vaddr_t sp;
 
 		/* Find vmem for thread stack and its protection gap */
-		mm = tee_mm_alloc(&tee_mm_vcore,
+		mm = tee_mm_alloc(&kernel_mm_vcore,
 				  SMALL_PAGE_SIZE + STACK_THREAD_SIZE);
 		assert(mm);
 
