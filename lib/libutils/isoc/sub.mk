@@ -6,6 +6,7 @@ cflags-bget_alloc.c-y += -Wno-sign-compare -Wno-cast-align
 ifeq ($(sm),core)
 cflags-remove-bget_alloc.c-y += $(cflags_kasan)
 endif
+srcs-y += malloc.c
 
 srcs-y += snprintf.c
 

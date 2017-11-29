@@ -38,6 +38,7 @@
 #include <kernel/misc.h>
 #include <kernel/panic.h>
 #include <kernel/tee_misc.h>
+#include <kernel/kmalloc.h>
 #include <kernel/thread.h>
 #include <malloc.h>
 #include <mm/core_memprot.h>
@@ -328,7 +329,9 @@ static void init_runtime(unsigned long pageable_part)
 	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
 	malloc_add_pool(__heap2_start, __heap2_end - __heap2_start);
 
-	hashes = malloc(hash_size);
+	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
+
+	hashes = kmalloc(hash_size);
 	IMSG_RAW("\n");
 	IMSG("Pager is enabled. Hashes: %zu bytes", hash_size);
 	assert(hashes);
@@ -437,6 +440,7 @@ static void init_runtime(unsigned long pageable_part __unused)
 
 	init_asan();
 	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
+	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
 
 	/*
 	 * Initialized at this stage in the pager version of this function

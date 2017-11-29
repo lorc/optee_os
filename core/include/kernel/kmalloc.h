@@ -25,58 +25,40 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #ifndef KMALLOC_H
-#define KKMALLOC_H
+#define KMALLOC_H
 
-#include <malloc.h>
 #include <stddef.h>
 #include <types_ext.h>
+#include <bget_alloc.h>
 
 void kfree(void *ptr);
 
 #ifdef ENABLE_MDBG
-
-void *kmdbg_malloc(const char *fname, int lineno, size_t size);
-void *kmdbg_calloc(const char *fname, int lineno, size_t nmemb, size_t size);
-void *kmdbg_realloc(const char *fname, int lineno, void *ptr, size_t size);
-void *kmdbg_memalign(const char *fname, int lineno, size_t alignment,
+/* XXX: Fix MDBG */
+void *mdbg_malloc(const char *fname, int lineno, size_t size);
+void *mdbg_calloc(const char *fname, int lineno, size_t nmemb, size_t size);
+void *mdbg_realloc(const char *fname, int lineno, void *ptr, size_t size);
+void *mdbg_memalign(const char *fname, int lineno, size_t alignment,
 		size_t size);
 
 void mdbg_check(int bufdump);
 
-#define kmalloc(size)	kmdbg_malloc(__FILE__, __LINE__, (size))
-#define kcalloc(nmemb, size) \
-		kmdbg_calloc(__FILE__, __LINE__, (nmemb), (size))
-#define krealloc(ptr, size) \
-		kmdbg_realloc(__FILE__, __LINE__, (ptr), (size))
-#define kmemalign(alignment, size) \
-		kmdbg_memalign(__FILE__, __LINE__, (alignment), (size))
+#define malloc(size)	mdbg_malloc(__FILE__, __LINE__, (size))
+#define calloc(nmemb, size) \
+		mdbg_calloc(__FILE__, __LINE__, (nmemb), (size))
+#define realloc(ptr, size) \
+		mdbg_realloc(__FILE__, __LINE__, (ptr), (size))
+#define memalign(alignment, size) \
+		mdbg_memalign(__FILE__, __LINE__, (alignment), (size))
 
 #else
 
 void *kmalloc(size_t size);
 void *kcalloc(size_t nmemb, size_t size);
 void *krealloc(void *ptr, size_t size);
-
-#define kmdbg_check(x)        do { } while (0)
+void *kmemalign(size_t alignment, size_t size);
 
 #endif
-
-
-/*
- * Returns true if the supplied memory area is within a buffer
- * previously allocated (and not kfreed yet).
- *
- * Used internally by TAs
- */
-bool kmalloc_buffer_is_within_alloced(void *buf, size_t len);
-
-/*
- * Returns true if the supplied memory area is overlapping the area used
- * for heap.
- *
- * Used internally by TAs
- */
-bool kmalloc_buffer_overlaps_heap(void *buf, size_t len);
 
 /*
  * Adds a pool of memory to allocate from.
@@ -84,12 +66,10 @@ bool kmalloc_buffer_overlaps_heap(void *buf, size_t len);
 void kmalloc_add_pool(void *buf, size_t len);
 
 #ifdef CFG_WITH_STATS
-/*
- * Get/reset allocation statistics
- */
 
 void kmalloc_get_stats(struct malloc_stats *stats);
 void kmalloc_reset_stats(void);
+
 #endif /* CFG_WITH_STATS */
 
 #endif /* KMALLOC_H */

@@ -95,6 +95,7 @@ register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, CFG_TEE_RAM_START,
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RX, VCORE_UNPG_RX_PA, VCORE_UNPG_RX_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, VCORE_UNPG_RO_PA, VCORE_UNPG_RO_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RW, VCORE_UNPG_RW_PA, VCORE_UNPG_RW_SZ);
+register_phys_mem_ul(MEM_AREA_KERN_RAM_RW, VCORE_UNPG_KERN_RW_PA, VCORE_UNPG_KERN_RW_SZ);
 #ifdef CFG_WITH_PAGER
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RX, VCORE_INIT_RX_PA, VCORE_INIT_RX_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, VCORE_INIT_RO_PA, VCORE_INIT_RO_SZ);
@@ -596,12 +597,14 @@ uint32_t core_mmu_type_to_attr(enum teecore_memtypes t)
 				  TEE_MATTR_CACHE_SHIFT;
 
 	switch (t) {
+	case MEM_AREA_KERN_RAM:
 	case MEM_AREA_TEE_RAM:
 		return attr | TEE_MATTR_SECURE | TEE_MATTR_PRWX | cached;
 	case MEM_AREA_TEE_RAM_RX:
 		return attr | TEE_MATTR_SECURE | TEE_MATTR_PRX | cached;
 	case MEM_AREA_TEE_RAM_RO:
 		return attr | TEE_MATTR_SECURE | TEE_MATTR_PR | cached;
+	case MEM_AREA_KERN_RAM_RW:
 	case MEM_AREA_TEE_RAM_RW:
 	case MEM_AREA_TEE_ASAN:
 		return attr | TEE_MATTR_SECURE | TEE_MATTR_PRW | cached;
@@ -632,6 +635,8 @@ uint32_t core_mmu_type_to_attr(enum teecore_memtypes t)
 static bool __maybe_unused map_is_tee_ram(const struct tee_mmap_region *mm)
 {
 	switch (mm->type) {
+	case MEM_AREA_KERN_RAM:
+	case MEM_AREA_KERN_RAM_RW:
 	case MEM_AREA_TEE_RAM:
 	case MEM_AREA_TEE_RAM_RX:
 	case MEM_AREA_TEE_RAM_RO:
@@ -925,6 +930,8 @@ void core_init_mmu_map(void)
 	map = static_memory_map;
 	while (!core_mmap_is_end_of_table(map)) {
 		switch (map->type) {
+		case MEM_AREA_KERN_RAM:
+		case MEM_AREA_KERN_RAM_RW:
 		case MEM_AREA_TEE_RAM:
 		case MEM_AREA_TEE_RAM_RX:
 		case MEM_AREA_TEE_RAM_RO:
@@ -1692,6 +1699,10 @@ static void *phys_to_virt_tee_ram(paddr_t pa)
 		mmap = find_map_by_type_and_pa(MEM_AREA_TEE_RAM_RO, pa);
 	if (!mmap)
 		mmap = find_map_by_type_and_pa(MEM_AREA_TEE_RAM_RX, pa);
+	if (!mmap)
+		mmap = find_map_by_type_and_pa(MEM_AREA_KERN_RAM_RW, pa);
+	if (!mmap)
+		mmap = find_map_by_type_and_pa(MEM_AREA_KERN_RAM, pa);
 
 	return map_pa2va(mmap, pa);
 }
@@ -1705,6 +1716,8 @@ void *phys_to_virt(paddr_t pa, enum teecore_memtypes m)
 	case MEM_AREA_TA_VASPACE:
 		va = phys_to_virt_ta_vaspace(pa);
 		break;
+	case MEM_AREA_KERN_RAM:
+	case MEM_AREA_KERN_RAM_RW:
 	case MEM_AREA_TEE_RAM:
 	case MEM_AREA_TEE_RAM_RX:
 	case MEM_AREA_TEE_RAM_RO:

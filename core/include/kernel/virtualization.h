@@ -33,9 +33,6 @@
 #include <types_ext.h>
 #include <mm/mobj.h>
 
-#define __kbss__ __section(".kbss")
-#define __kdata__ __section(".kdata")
-
 struct thread_rpc_arg {
 	uint64_t rpc_carg;
 	void *rpc_arg;

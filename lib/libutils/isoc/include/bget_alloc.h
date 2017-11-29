@@ -25,15 +25,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef ALLOC_H
-#define ALLOC_H
+#ifndef BGET_ALLOC_H
+#define BGET_ALLOC_H
 
+#include <compiler.h>
 #include <stddef.h>
 #include <types_ext.h>
 
 #ifdef CFG_WITH_STATS
 #define TEE_ALLOCATOR_DESC_LENGTH 32
-struct bget_malloc_stats {
+struct malloc_stats {
 	char desc[TEE_ALLOCATOR_DESC_LENGTH];
 	uint32_t allocated;               /* Bytes currently allocated */
 	uint32_t max_allocated;           /* Tracks max value of allocated */
@@ -60,13 +61,13 @@ struct bget_poolset {
 	struct bget_alloc_pool *alloc_pool;
 	size_t pool_len;
 #ifdef CFG_WITH_STATS
-	struct bget_malloc_stats mstats;
+	struct malloc_stats mstats;
 #endif
 	unsigned int lock;
 };
 
-#define DEF_BGET_POOLSET(name)				\
-	struct bget_bpoolset name = {{0, 0}, &name, &name, NULL, 0, 0}
+#define BGET_INIT_POOLSET(name)				\
+	{.ptr1 = &name, .ptr2 = &name}
 
 void bget_free(void *ptr, struct bget_poolset *poolset);
 
@@ -105,9 +106,9 @@ void bget_malloc_add_pool(void *buf, size_t len,
  * Get/reset allocation statistics
  */
 
-void bget_malloc_get_stats(struct bget_malloc_stats *stats,
+void bget_malloc_get_stats(struct malloc_stats *stats,
 			   struct bget_poolset *poolset);
 void bget_malloc_reset_stats(struct bget_poolset *poolset);
 #endif /* CFG_WITH_STATS */
 
-#endif /* ALLOC_H */
+#endif /* BGET_ALLOC_H */

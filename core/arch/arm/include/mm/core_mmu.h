@@ -93,6 +93,10 @@
 /*
  * Memory area type:
  * MEM_AREA_END:      Reserved, marks the end of a table of mapping areas.
+ * MEM_AREA_KERN_RAM:  kernel RAM (read/write/executable, secure, reserved to kernel)
+ * MEM_AREA_KERN_RAM_RX:  kernel private read-only/executable memory (secure)
+ * MEM_AREA_KERN_RAM_RO:  kernl private read-only/non-executable memory (secure)
+ * MEM_AREA_KERN_RAM_RW:  ckernel private read/write/non-executable memory (secure)
  * MEM_AREA_TEE_RAM:  core RAM (read/write/executable, secure, reserved to TEE)
  * MEM_AREA_TEE_RAM_RX:  core private read-only/executable memory (secure)
  * MEM_AREA_TEE_RAM_RO:  core private read-only/non-executable memory (secure)
@@ -112,6 +116,8 @@
  */
 enum teecore_memtypes {
 	MEM_AREA_END = 0,
+	MEM_AREA_KERN_RAM,
+	MEM_AREA_KERN_RAM_RW,
 	MEM_AREA_TEE_RAM,
 	MEM_AREA_TEE_RAM_RX,
 	MEM_AREA_TEE_RAM_RO,
@@ -136,7 +142,9 @@ static inline const char *teecore_memtype_name(enum teecore_memtypes type)
 {
 	static const char * const names[] = {
 		[MEM_AREA_END] = "END",
-		[MEM_AREA_TEE_RAM] = "TEE_RAM_RWX",
+		[MEM_AREA_KERN_RAM] = "TEE_KERN_RWX",
+		[MEM_AREA_KERN_RAM_RW] = "TEE_KERN_RW",
+		[MEM_AREA_TEE_RAM] = "TEE_RAM_RW",
 		[MEM_AREA_TEE_RAM_RX] = "TEE_RAM_RX",
 		[MEM_AREA_TEE_RAM_RO] = "TEE_RAM_RO",
 		[MEM_AREA_TEE_RAM_RW] = "TEE_RAM_RW",

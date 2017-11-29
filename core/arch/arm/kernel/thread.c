@@ -91,7 +91,7 @@
 
 struct thread_ctx threads[CFG_NUM_THREADS];
 
-struct thread_core_local thread_core_local[CFG_TEE_CORE_NB_CORE];// __kbss__;
+struct thread_core_local thread_core_local[CFG_TEE_CORE_NB_CORE] __kbss;
 
 #ifdef CFG_WITH_STACK_CANARIES
 #ifdef ARM32

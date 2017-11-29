@@ -207,31 +207,32 @@ SECTIONS
 		__extab_end = .;
 	}
 
-
 /* Keep all kernel data on separate page */
-#ifdef CFG_VIRTUALIZATION
 	. = ALIGN(SMALL_PAGE_SIZE);
-/* TODO: Move it back, create separate mapping for kernel */
 	__flatmap_unpg_ro_size = . - __flatmap_unpg_ro_start;
-	__flatmap_unpg_rw_start = .;
+	__flatmap_unpg_kern_rw_start = .;
+/* TODO: Move it back, create separate mapping for kernel */
 	.kdata : ALIGN(8) {
 		*(.kdata .kdata.*)
 	}
-	.bss : ALIGN(8) {
+	.kbss : ALIGN(8) {
+		__kbss_start = .;
 		*(.kbss .kbss.*)
+		__kbss_end = .;
 	}
 	.kheap (NOLOAD) : {
 	       __kheap_start = .;
 	       . += CFG_CORE_HEAP_SIZE;
+	       . = ALIGN(SMALL_PAGE_SIZE);
 	       __kheap_end = .;
 	}
-#endif
 
 	/* Start page aligned read-write memory */
 #ifdef CFG_CORE_RWDATA_NOEXEC
 	. = ALIGN(SMALL_PAGE_SIZE);
 #endif
-
+	__flatmap_unpg_kern_rw_size = . - __flatmap_unpg_kern_rw_start;
+	__flatmap_unpg_rw_start = .;
 	.data : ALIGN(8) {
 		/* writable data  */
 		__data_start_rom = .;
@@ -481,6 +482,9 @@ PROVIDE(__vcore_unpg_ro_size = 0);
 /* Unpaged read-write memory */
 PROVIDE(__vcore_unpg_rw_start = __flatmap_unpg_rw_start);
 PROVIDE(__vcore_unpg_rw_size = __flatmap_unpg_rw_size);
+
+PROVIDE(__vcore_unpg_kern_rw_start = __flatmap_unpg_kern_rw_start);
+PROVIDE(__vcore_unpg_kern_rw_size = __flatmap_unpg_kern_rw_size);
 
 #ifdef CFG_WITH_PAGER
 /*

@@ -121,6 +121,17 @@ clear_bss:
 	cmp	x0, x1
 	b.lt	clear_bss
 
+	/*
+	 * Clear k.bss, this code obviously depends on the linker keeping
+	 * start/end of .bss at least 8 byte aligned.
+	 */
+	adr	x0, __kbss_start
+	adr	x1, __kbss_end
+clear_kbss:
+	str	xzr, [x0], #8
+	cmp	x0, x1
+	b.lt	clear_kbss
+
 	/* Setup SP_EL0 and SP_EL1, SP will be set to SP_EL0 */
 	set_sp
 

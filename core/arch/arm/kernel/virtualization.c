@@ -27,6 +27,7 @@
 
 #include <initcall.h>
 #include <kernel/panic.h>
+#include <kernel/kmalloc.h>
 #include <kernel/spinlock.h>
 #include <kernel/virtualization.h>
 #include <kernel/thread.h>
@@ -82,7 +83,7 @@ int client_created(uint16_t client_id)
 	struct client_context *ctx;
 	uint32_t exceptions;
 
-	ctx = malloc(sizeof(*ctx));
+	ctx = kmalloc(sizeof(*ctx));
 
 	if (!ctx)
 		return OPTEE_SMC_RETURN_ENOTAVAIL;
@@ -129,6 +130,8 @@ void client_destroyed(uint16_t client_id)
 	 * TODO: Implement thread termination.
 	 */
 	thread_force_free_prealloc_rpc_cache(ctx);
+
+	kfree(ctx);
 }
 
 static TEE_Result virtualization_init(void)

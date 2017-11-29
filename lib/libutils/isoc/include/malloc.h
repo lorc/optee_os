@@ -29,6 +29,9 @@
 
 #include <stddef.h>
 #include <types_ext.h>
+#include <bget_alloc.h>
+
+extern struct bget_poolset malloc_poolset;
 
 void free(void *ptr);
 
@@ -57,11 +60,7 @@ void *calloc(size_t nmemb, size_t size);
 void *realloc(void *ptr, size_t size);
 void *memalign(size_t alignment, size_t size);
 
-#define mdbg_check(x)        do { } while (0)
-
 #endif
-
-
 /*
  * Returns true if the supplied memory area is within a buffer
  * previously allocated (and not freed yet).
@@ -84,23 +83,10 @@ bool malloc_buffer_overlaps_heap(void *buf, size_t len);
 void malloc_add_pool(void *buf, size_t len);
 
 #ifdef CFG_WITH_STATS
-/*
- * Get/reset allocation statistics
- */
-
-#define TEE_ALLOCATOR_DESC_LENGTH 32
-struct malloc_stats {
-	char desc[TEE_ALLOCATOR_DESC_LENGTH];
-	uint32_t allocated;               /* Bytes currently allocated */
-	uint32_t max_allocated;           /* Tracks max value of allocated */
-	uint32_t size;                    /* Total size for this allocator */
-	uint32_t num_alloc_fail;          /* Number of failed alloc requests */
-	uint32_t biggest_alloc_fail;      /* Size of biggest failed alloc */
-	uint32_t biggest_alloc_fail_used; /* Alloc bytes when above occurred */
-};
 
 void malloc_get_stats(struct malloc_stats *stats);
 void malloc_reset_stats(void);
+
 #endif /* CFG_WITH_STATS */
 
 #endif /* MALLOC_H */

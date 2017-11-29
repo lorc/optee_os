@@ -26,6 +26,7 @@
  */
 
 #include <kernel/panic.h>
+#include <kernel/kmalloc.h>
 #include <kernel/spinlock.h>
 #include <kernel/tee_common.h>
 #include <util.h>
@@ -50,7 +51,7 @@ bool tee_mm_init(tee_mm_pool_t *pool, paddr_t lo, paddr_t hi, uint8_t shift,
 	pool->hi = hi;
 	pool->shift = shift;
 	pool->flags = flags;
-	pool->entry = calloc(1, sizeof(tee_mm_entry_t));
+	pool->entry = kcalloc(1, sizeof(tee_mm_entry_t));
 
 	if (pool->entry == NULL)
 		return false;
@@ -70,7 +71,7 @@ void tee_mm_final(tee_mm_pool_t *pool)
 
 	while (pool->entry->next != NULL)
 		tee_mm_free(pool->entry->next);
-	free(pool->entry);
+	kfree(pool->entry);
 	pool->entry = NULL;
 }
 
@@ -145,7 +146,7 @@ tee_mm_entry_t *tee_mm_alloc(tee_mm_pool_t *pool, size_t size)
 	if (!pool || !pool->entry)
 		return NULL;
 
-	nn = malloc(sizeof(tee_mm_entry_t));
+	nn = kmalloc(sizeof(tee_mm_entry_t));
 	if (!nn)
 		return NULL;
 
@@ -215,7 +216,7 @@ tee_mm_entry_t *tee_mm_alloc(tee_mm_pool_t *pool, size_t size)
 	return nn;
 err:
 	cpu_spin_unlock_xrestore(&pool->lock, exceptions);
-	free(nn);
+	kfree(nn);
 	return NULL;
 }
 
@@ -256,7 +257,7 @@ tee_mm_entry_t *tee_mm_alloc2(tee_mm_pool_t *pool, paddr_t base, size_t size)
 	if ((base + size) < base || base < pool->lo)
 		return NULL;
 
-	mm = malloc(sizeof(tee_mm_entry_t));
+	mm = kmalloc(sizeof(tee_mm_entry_t));
 	if (!mm)
 		return NULL;
 
@@ -291,7 +292,7 @@ tee_mm_entry_t *tee_mm_alloc2(tee_mm_pool_t *pool, paddr_t base, size_t size)
 	return mm;
 err:
 	cpu_spin_unlock_xrestore(&pool->lock, exceptions);
-	free(mm);
+	kfree(mm);
 	return NULL;
 }
 
@@ -316,7 +317,7 @@ void tee_mm_free(tee_mm_entry_t *p)
 	entry->next = entry->next->next;
 	cpu_spin_unlock_xrestore(&p->pool->lock, exceptions);
 
-	free(p);
+	kfree(p);
 }
 
 size_t tee_mm_get_bytes(const tee_mm_entry_t *mm)
