@@ -56,7 +56,8 @@
 #define TEE_MATTR_CACHE_CACHED	1
 
 #define TEE_MATTR_LOCKED		(1 << 15)
-
+#define TEE_MATTR_KERNEL		(1 << 16)
+#define TEE_MATTR_TEE			(1 << 17)
 #define TEE_MMU_UMAP_STACK_IDX	0
 #define TEE_MMU_UMAP_CODE_IDX	1
 #define TEE_MMU_UMAP_NUM_CODE_SEGMENTS	3

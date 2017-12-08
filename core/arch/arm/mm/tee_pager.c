@@ -40,6 +40,7 @@
 #include <kernel/tee_ta_manager.h>
 #include <kernel/thread.h>
 #include <kernel/tlb_helpers.h>
+#include <kernel/virtualization.h>
 #include <mm/core_memprot.h>
 #include <mm/tee_mm.h>
 #include <mm/tee_pager.h>
@@ -66,7 +67,8 @@ struct pager_rw_pstate {
 
 enum area_type {
 	AREA_TYPE_RO,
-	AREA_TYPE_RW,
+	AREA_TYPE_KERN_RW,
+	AREA_TYPE_TEE_RW,
 	AREA_TYPE_LOCK,
 };
 
@@ -521,7 +523,11 @@ static struct tee_pager_area *alloc_area(struct pgt *pgt,
 				     sizeof(struct pager_rw_pstate));
 		if (!area->u.rwp)
 			goto bad;
-		at = AREA_TYPE_RW;
+
+		if (flags & TEE_MATTR_TEE)
+			at = AREA_TYPE_TEE_RW;
+		else
+			at = AREA_TYPE_KERN_RW;
 	} else {
 		area->store = (void *)store;
 		area->u.hashes = hashes;
@@ -568,11 +574,17 @@ void tee_pager_add_core_area(vaddr_t base, size_t size, uint32_t flags,
 		panic();
 	}
 
+	if ((flags & TEE_MATTR_TEE) && (flags & TEE_MATTR_KERNEL))
+		panic("area can't be both TEE and KERNEL at the same time");
+
 	if (!(flags & TEE_MATTR_PW) && (!store || !hashes))
 		panic("write pages cannot provide store or hashes");
 
 	if ((flags & TEE_MATTR_PW) && (store || hashes))
 		panic("non-write pages must provide store and hashes");
+
+	if ((flags & TEE_MATTR_PW) && !(flags & (TEE_MATTR_KERNEL | TEE_MATTR_TEE)))
+		panic("area should be either kernel or tee");
 
 	while (s) {
 		s2 = MIN(CORE_MMU_PGDIR_SIZE - (b & CORE_MMU_PGDIR_MASK), s);
@@ -721,7 +733,7 @@ static void tee_pager_load_page(struct tee_pager_area *area, vaddr_t page_va,
 		core_mmu_set_entry(ti, idx_alias, pa_alias, attr_alias);
 		tlbi_mva_allasid((vaddr_t)va_alias);
 		break;
-	case AREA_TYPE_RW:
+	case AREA_TYPE_TEE_RW:
 		FMSG("Restore %p %#" PRIxVA " iv %#" PRIx64,
 			va_alias, page_va, area->u.rwp[idx].iv);
 		if (!area->u.rwp[idx].iv)
@@ -748,7 +760,7 @@ static void tee_pager_save_page(struct tee_pager_pmem *pmem, uint32_t attr)
 	const uint32_t dirty_bits = TEE_MATTR_PW | TEE_MATTR_UW |
 				    TEE_MATTR_HIDDEN_DIRTY_BLOCK;
 
-	if (pmem->area->type == AREA_TYPE_RW && (attr & dirty_bits)) {
+	if (pmem->area->type == AREA_TYPE_TEE_RW && (attr & dirty_bits)) {
 		size_t offs = pmem->area->base & CORE_MMU_PGDIR_MASK;
 		size_t idx = pmem->pgidx - (offs >> SMALL_PAGE_SHIFT);
 		void *stored_page = pmem->area->store + idx * SMALL_PAGE_SIZE;
@@ -771,7 +783,7 @@ static void free_area(struct tee_pager_area *area)
 {
 	tee_mm_free(tee_mm_find(&tee_mm_sec_ddr,
 				virt_to_phys(area->store)));
-	if (area->type == AREA_TYPE_RW)
+	if (area->type == AREA_TYPE_TEE_RW)
 		free(area->u.rwp);
 	free(area);
 }
@@ -1685,7 +1697,8 @@ KEEP_PAGER(tee_pager_release_phys);
 void *tee_pager_alloc(size_t size, uint32_t flags)
 {
 	tee_mm_entry_t *mm;
-	uint32_t f = TEE_MATTR_PW | TEE_MATTR_PR | (flags & TEE_MATTR_LOCKED);
+	uint32_t f = TEE_MATTR_PW | TEE_MATTR_PR |
+		(flags & (TEE_MATTR_LOCKED | TEE_MATTR_KERNEL | TEE_MATTR_TEE));
 	uint8_t *smem;
 	size_t bytes;
 

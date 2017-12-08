@@ -95,7 +95,7 @@ register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, CFG_TEE_RAM_START,
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RX, VCORE_UNPG_RX_PA, VCORE_UNPG_RX_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, VCORE_UNPG_RO_PA, VCORE_UNPG_RO_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RW, VCORE_UNPG_RW_PA, VCORE_UNPG_RW_SZ);
-register_phys_mem_ul(MEM_AREA_KERN_RAM_RW, VCORE_UNPG_KERN_RW_PA, VCORE_UNPG_KERN_RW_SZ);
+register_phys_mem_ul(MEM_AREA_KERN_RAM_RW, VCORE_KERN_RW_PA, VCORE_KERN_RW_SZ);
 #ifdef CFG_WITH_PAGER
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RX, VCORE_INIT_RX_PA, VCORE_INIT_RX_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, VCORE_INIT_RO_PA, VCORE_INIT_RO_SZ);
@@ -528,8 +528,9 @@ static void add_phys_mem(struct tee_mmap_region *memory_map, size_t num_elems,
 	 * mapped as both secure and non-secure. This will probably not
 	 * happen often in practice.
 	 */
-	DMSG("%s type %s 0x%08" PRIxPA " size 0x%08" PRIxPASZ,
-	     mem->name, teecore_memtype_name(mem->type), mem->addr, mem->size);
+	DMSG("%s type %s 0x%08" PRIxPA " size 0x%08" PRIxPASZ " end 0x%08" PRIxPA,
+	     mem->name, teecore_memtype_name(mem->type), mem->addr, mem->size,
+	     mem->addr + mem->size);
 	while (true) {
 		if (n >= (num_elems - 1)) {
 			EMSG("Out of entries (%zu) in memory_map", num_elems);

@@ -351,8 +351,11 @@ bool tee_mm_is_empty(tee_mm_pool_t *pool)
 /* Physical Secure DDR pool */
 tee_mm_pool_t tee_mm_sec_ddr;
 
-/* Virtual eSRAM pool */
+/* Virtual eSRAM pool (kernel space) */
 tee_mm_pool_t kernel_mm_vcore;
+
+/* Virtual eSRAM pool (TEE space) */
+tee_mm_pool_t tee_mm_vcore;
 
 /* Shared memory pool */
 tee_mm_pool_t tee_mm_shm;

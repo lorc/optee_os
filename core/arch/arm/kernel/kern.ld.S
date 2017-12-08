@@ -210,7 +210,7 @@ SECTIONS
 /* Keep all kernel data on separate page */
 	. = ALIGN(SMALL_PAGE_SIZE);
 	__flatmap_unpg_ro_size = . - __flatmap_unpg_ro_start;
-	__flatmap_unpg_kern_rw_start = .;
+	__flatmap_kern_rw_start = .;
 /* TODO: Move it back, create separate mapping for kernel */
 	.kdata : ALIGN(8) {
 		*(.kdata .kdata.*)
@@ -226,12 +226,12 @@ SECTIONS
 	       . = ALIGN(SMALL_PAGE_SIZE);
 	       __kheap_end = .;
 	}
-
+	__flatmap_kern_rw_size = . - __flatmap_kern_rw_start;
 	/* Start page aligned read-write memory */
 #ifdef CFG_CORE_RWDATA_NOEXEC
 	. = ALIGN(SMALL_PAGE_SIZE);
 #endif
-	__flatmap_unpg_kern_rw_size = . - __flatmap_unpg_kern_rw_start;
+
 	__flatmap_unpg_rw_start = .;
 	.data : ALIGN(8) {
 		/* writable data  */
@@ -483,8 +483,9 @@ PROVIDE(__vcore_unpg_ro_size = 0);
 PROVIDE(__vcore_unpg_rw_start = __flatmap_unpg_rw_start);
 PROVIDE(__vcore_unpg_rw_size = __flatmap_unpg_rw_size);
 
-PROVIDE(__vcore_unpg_kern_rw_start = __flatmap_unpg_kern_rw_start);
-PROVIDE(__vcore_unpg_kern_rw_size = __flatmap_unpg_kern_rw_size);
+/* Kernel read-write memory */
+PROVIDE(__vcore_kern_rw_start = __flatmap_kern_rw_start);
+PROVIDE(__vcore_kern_rw_size = __flatmap_kern_rw_size);
 
 #ifdef CFG_WITH_PAGER
 /*
