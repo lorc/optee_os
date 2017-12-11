@@ -122,7 +122,7 @@ clear_bss:
 	b.lt	clear_bss
 
 	/*
-	 * Clear k.bss, this code obviously depends on the linker keeping
+	 * Clear .kbss, this code obviously depends on the linker keeping
 	 * start/end of .bss at least 8 byte aligned.
 	 */
 	adr	x0, __kbss_start
@@ -132,6 +132,18 @@ clear_kbss:
 	cmp	x0, x1
 	b.lt	clear_kbss
 
+	/*
+	 * Copy .data into backup area. Linker should keep .data section
+	 * at least 8 byte aligned.
+	*/
+	adr	x0, __data_start
+	adr	x1, __data_end
+	adr	x2, __data_copy_start
+copy_data:
+	ldr	x3, [x0], #8
+	str	x3, [x2], #8
+	cmp	x0, x1
+	b.lt	copy_data
 	/* Setup SP_EL0 and SP_EL1, SP will be set to SP_EL0 */
 	set_sp
 
@@ -174,8 +186,8 @@ clear_kbss:
 	adrp	x1, __tmp_hashes_end
 	add	x1, x1, :lo12:__tmp_hashes_end
 #else
-	adrp	x1, __end
-	add	x1, x1, :lo12:__end
+	adrp	x1, __flatmap_kern_rw_end
+	add	x1, x1, :lo12:__flatmap_kern_rw_end
 #endif
 	sub	x1, x1, x0
 	bl	dcache_cleaninv_range
@@ -186,7 +198,7 @@ clear_kbss:
 	 * next entry. Matches the thread_init_boot_thread in
 	 * generic_boot.c.
 	 */
-	bl 	thread_clr_boot_thread
+//	bl 	thread_clr_boot_thread
 
 	/* Pass the vector address returned from main_init */
 	mov	x1, x19

@@ -36,6 +36,30 @@
 #include <mm/tee_mm.h>
 #include <mm/tee_pager.h>
 
+static void *pmalloc(tee_mm_pool_t *pool, size_t size)
+{
+	if (pool->flags & TEE_MM_POOL_KMALLOC)
+		return kmalloc(size);
+	else
+		return malloc(size);
+}
+
+static void *pcalloc(tee_mm_pool_t *pool, size_t num_el, size_t size)
+{
+	if (pool->flags & TEE_MM_POOL_KMALLOC)
+		return kcalloc(num_el, size);
+	else
+		return calloc(num_el, size);
+}
+
+static void pfree(tee_mm_pool_t *pool, void *ptr)
+{
+	if (pool->flags & TEE_MM_POOL_KMALLOC)
+		kfree(ptr);
+	else
+		free(ptr);
+}
+
 bool tee_mm_init(tee_mm_pool_t *pool, paddr_t lo, paddr_t hi, uint8_t shift,
 		 uint32_t flags)
 {
@@ -51,7 +75,7 @@ bool tee_mm_init(tee_mm_pool_t *pool, paddr_t lo, paddr_t hi, uint8_t shift,
 	pool->hi = hi;
 	pool->shift = shift;
 	pool->flags = flags;
-	pool->entry = kcalloc(1, sizeof(tee_mm_entry_t));
+	pool->entry = pcalloc(pool, 1, sizeof(tee_mm_entry_t));
 
 	if (pool->entry == NULL)
 		return false;
@@ -71,7 +95,7 @@ void tee_mm_final(tee_mm_pool_t *pool)
 
 	while (pool->entry->next != NULL)
 		tee_mm_free(pool->entry->next);
-	kfree(pool->entry);
+	pfree(pool, pool->entry);
 	pool->entry = NULL;
 }
 
@@ -146,7 +170,7 @@ tee_mm_entry_t *tee_mm_alloc(tee_mm_pool_t *pool, size_t size)
 	if (!pool || !pool->entry)
 		return NULL;
 
-	nn = kmalloc(sizeof(tee_mm_entry_t));
+	nn = pmalloc(pool, sizeof(tee_mm_entry_t));
 	if (!nn)
 		return NULL;
 
@@ -216,7 +240,7 @@ tee_mm_entry_t *tee_mm_alloc(tee_mm_pool_t *pool, size_t size)
 	return nn;
 err:
 	cpu_spin_unlock_xrestore(&pool->lock, exceptions);
-	kfree(nn);
+	pfree(pool, nn);
 	return NULL;
 }
 
@@ -257,7 +281,7 @@ tee_mm_entry_t *tee_mm_alloc2(tee_mm_pool_t *pool, paddr_t base, size_t size)
 	if ((base + size) < base || base < pool->lo)
 		return NULL;
 
-	mm = kmalloc(sizeof(tee_mm_entry_t));
+	mm = pmalloc(pool, sizeof(tee_mm_entry_t));
 	if (!mm)
 		return NULL;
 
@@ -292,7 +316,7 @@ tee_mm_entry_t *tee_mm_alloc2(tee_mm_pool_t *pool, paddr_t base, size_t size)
 	return mm;
 err:
 	cpu_spin_unlock_xrestore(&pool->lock, exceptions);
-	kfree(mm);
+	pfree(pool, mm);
 	return NULL;
 }
 
@@ -317,7 +341,7 @@ void tee_mm_free(tee_mm_entry_t *p)
 	entry->next = entry->next->next;
 	cpu_spin_unlock_xrestore(&p->pool->lock, exceptions);
 
-	kfree(p);
+	pfree(p->pool, p);
 }
 
 size_t tee_mm_get_bytes(const tee_mm_entry_t *mm)

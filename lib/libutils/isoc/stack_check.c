@@ -24,7 +24,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-void *__stack_chk_guard = (void *)0x00000aff;
+#include <compiler.h>
+
+void *__stack_chk_guard __kdata = (void *)0x00000aff;
 
 void __attribute__((noreturn)) __stack_chk_fail(void);
 

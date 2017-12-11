@@ -29,6 +29,7 @@
 #include <arm.h>
 #include <assert.h>
 #include <kernel/panic.h>
+#include <kernel/virt_mapper.h>
 #include <kernel/tlb_helpers.h>
 #include <kernel/tee_common.h>
 #include <kernel/tee_misc.h>
@@ -190,6 +191,7 @@ static TEE_Result tee_mmu_umap_set_vas(struct tee_mmu_info *mmu)
 		va += mmu->regions[n].size;
 		/* Put some empty space between each area */
 		va += granule;
+
 		if ((va - va_range_base) >= va_range_size)
 			return TEE_ERROR_EXCESS_DATA;
 	}
@@ -874,16 +876,12 @@ uintptr_t tee_mmu_get_load_addr(const struct tee_ta_ctx *const ctx)
 
 void teecore_init_ta_ram(void)
 {
-	vaddr_t s;
-	vaddr_t e;
 	paddr_t ps;
 	paddr_t pe;
 
-	/* get virtual addr/size of RAM where TA are loaded/executedNSec
-	 * shared mem allcated from teecore */
-	core_mmu_get_mem_by_type(MEM_AREA_TA_RAM, &s, &e);
-	ps = virt_to_phys((void *)s);
-	pe = virt_to_phys((void *)(e - 1)) + 1;
+	virt_mapper_get_ta_range(curr_client(), &ps, &pe);
+
+	DMSG("ps = %lx, pe=%lx, mask = %x", ps, pe, CORE_MMU_USER_CODE_MASK);
 
 	if (!ps || (ps & CORE_MMU_USER_CODE_MASK) ||
 	    !pe || (pe & CORE_MMU_USER_CODE_MASK))

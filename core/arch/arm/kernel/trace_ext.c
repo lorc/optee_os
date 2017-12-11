@@ -32,8 +32,8 @@
 #include <mm/core_mmu.h>
 
 const char trace_ext_prefix[] = "TEE-CORE";
-int trace_level = TRACE_LEVEL;
-static unsigned int puts_lock = SPINLOCK_UNLOCK;
+int trace_level __kdata = TRACE_LEVEL;
+static unsigned int puts_lock __kdata = SPINLOCK_UNLOCK;
 
 void trace_ext_puts(const char *str)
 {

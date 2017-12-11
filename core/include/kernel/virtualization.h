@@ -32,6 +32,7 @@
 #include <stdint.h>
 #include <types_ext.h>
 #include <mm/mobj.h>
+#include <kernel/virt_mapper.h>
 
 struct thread_rpc_arg {
 	uint64_t rpc_carg;
@@ -44,9 +45,12 @@ struct client_context {
 	LIST_ENTRY(client_context) next;
 #endif
 	struct thread_rpc_arg thr_rpc_arg[CFG_NUM_THREADS];
+	struct mapper_ctx *mapper_ctx;
 	bool thread_prealloc_rpc_cache;
 	uint16_t id;
 };
+
+void virtualization_init(void);
 
 #ifdef CFG_VIRTUALIZATION
 

@@ -433,6 +433,7 @@ static TEE_Result user_ta_enter(TEE_ErrorOrigin *err,
 		utc->mobj_stack->size;
 	usr_stack -= ROUNDUP(sizeof(struct utee_params), STACK_ALIGNMENT);
 	usr_params = (struct utee_params *)usr_stack;
+
 	init_utee_param(usr_params, param, param_va);
 
 	res = thread_enter_user_mode(func, tee_svc_kaddr_to_uref(session),

@@ -37,6 +37,7 @@
 #include <kernel/panic.h>
 #include <kernel/spinlock.h>
 #include <kernel/virtualization.h>
+#include <kernel/virt_mapper.h>
 #include <kernel/tee_ta_manager.h>
 #include <kernel/thread_defs.h>
 #include <kernel/thread.h>
@@ -113,7 +114,7 @@ struct thread_core_local thread_core_local[CFG_TEE_CORE_NB_CORE] __kbss;
 linkage uint32_t name[num_stacks] \
 		[ROUNDUP(stack_size + STACK_CANARY_SIZE, STACK_ALIGNMENT) / \
 		sizeof(uint32_t)] \
-		__attribute__((section(".nozi_stack"), \
+		__attribute__((section(".nozi_stack." # name), \
 			       aligned(STACK_ALIGNMENT)))
 
 #define STACK_SIZE(stack) (sizeof(stack) - STACK_CANARY_SIZE / 2)
@@ -127,9 +128,9 @@ DECLARE_STACK(stack_abt, CFG_TEE_CORE_NB_CORE, STACK_ABT_SIZE, static);
 DECLARE_STACK(stack_thread, CFG_NUM_THREADS, STACK_THREAD_SIZE, static);
 #endif
 
-const void *stack_tmp_export = (uint8_t *)stack_tmp + sizeof(stack_tmp[0]) -
+const void *stack_tmp_export __attribute__((section(".kdata.st"))) = (uint8_t *)stack_tmp + sizeof(stack_tmp[0]) -
 			       (STACK_TMP_OFFS + STACK_CANARY_SIZE / 2);
-const uint32_t stack_tmp_stride = sizeof(stack_tmp[0]);
+const uint32_t stack_tmp_stride __kdata = sizeof(stack_tmp[0]);
 
 /*
  * These stack setup info are required by secondary boot cores before they
@@ -138,18 +139,18 @@ const uint32_t stack_tmp_stride = sizeof(stack_tmp[0]);
 KEEP_PAGER(stack_tmp_export);
 KEEP_PAGER(stack_tmp_stride);
 
-thread_smc_handler_t thread_std_smc_handler_ptr;
-static thread_smc_handler_t thread_fast_smc_handler_ptr;
-thread_nintr_handler_t thread_nintr_handler_ptr;
-thread_pm_handler_t thread_cpu_on_handler_ptr;
-thread_pm_handler_t thread_cpu_off_handler_ptr;
-thread_pm_handler_t thread_cpu_suspend_handler_ptr;
-thread_pm_handler_t thread_cpu_resume_handler_ptr;
-thread_pm_handler_t thread_system_off_handler_ptr;
-thread_pm_handler_t thread_system_reset_handler_ptr;
+thread_smc_handler_t thread_std_smc_handler_ptr __kbss;
+static thread_smc_handler_t thread_fast_smc_handler_ptr __kbss;
+thread_nintr_handler_t thread_nintr_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_on_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_off_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_suspend_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_resume_handler_ptr __kbss;
+thread_pm_handler_t thread_system_off_handler_ptr __kbss;
+thread_pm_handler_t thread_system_reset_handler_ptr __kbss;
 
 
-static unsigned int thread_global_lock = SPINLOCK_UNLOCK;
+static unsigned int thread_global_lock __kbss = SPINLOCK_UNLOCK;
 
 static void init_canaries(void)
 {
@@ -397,10 +398,62 @@ static void init_regs(struct thread_ctx *thread,
 }
 #endif /*ARM64*/
 
+#ifdef CFG_WITH_PAGER
+static void init_thread_stacks(void)
+{
+	size_t n;
+
+	/*
+	 * Allocate virtual memory for thread stacks.
+	 */
+	for (n = 0; n < CFG_NUM_THREADS; n++) {
+		tee_mm_entry_t *mm;
+		vaddr_t sp;
+
+		/* Find vmem for thread stack and its protection gap */
+		mm = tee_mm_alloc(&kernel_mm_vcore,
+				  SMALL_PAGE_SIZE + STACK_THREAD_SIZE);
+		assert(mm);
+
+		/* Claim eventual physical page */
+		tee_pager_add_pages(tee_mm_get_smem(mm), tee_mm_get_size(mm),
+				    true);
+
+		/* Add the area to the pager */
+		tee_pager_add_core_area(tee_mm_get_smem(mm) + SMALL_PAGE_SIZE,
+					tee_mm_get_bytes(mm) - SMALL_PAGE_SIZE,
+					TEE_MATTR_PRW | TEE_MATTR_LOCKED | TEE_MATTR_TEE,
+					NULL, NULL);
+
+		/* init effective stack */
+		sp = tee_mm_get_smem(mm) + tee_mm_get_bytes(mm);
+		asan_tag_access((void *)tee_mm_get_smem(mm), (void *)sp);
+		if (!thread_init_stack(n, sp))
+			panic("init stack failed");
+	}
+}
+#else
+static void init_thread_stacks(void)
+{
+	size_t n;
+
+	/* Assign the thread stacks */
+	for (n = 0; n < CFG_NUM_THREADS; n++) {
+		if (!thread_init_stack(n, GET_STACK(stack_thread[n])))
+			panic("thread_init_stack failed");
+	}
+}
+#endif /*CFG_WITH_PAGER*/
+
 void thread_init_boot_thread(void)
 {
 	struct thread_core_local *l = thread_get_core_local();
 	size_t n;
+
+	/* Initialize canaries around the stacks */
+	init_canaries();
+
+	init_thread_stacks();
 
 	for (n = 0; n < CFG_NUM_THREADS; n++) {
 		TAILQ_INIT(&threads[n].mutexes);
@@ -433,6 +486,8 @@ static void thread_alloc_and_run(struct thread_smc_args *args)
 	bool found_thread = false;
 
 	assert(l->curr_thread == -1);
+
+	virt_mapper_map_client(get_client_context(args->a7));
 
 	lock_global();
 
@@ -528,6 +583,7 @@ static void thread_resume_from_rpc(struct thread_smc_args *args)
 	uint32_t rv = 0;
 
 	assert(l->curr_thread == -1);
+	virt_mapper_map_client(get_client_context(args->a7));
 
 	lock_global();
 
@@ -542,6 +598,7 @@ static void thread_resume_from_rpc(struct thread_smc_args *args)
 
 	if (rv) {
 		args->a0 = rv;
+		virt_mapper_unmap_client(curr_client());
 		return;
 	}
 
@@ -568,7 +625,7 @@ static void thread_resume_from_rpc(struct thread_smc_args *args)
 
 void thread_handle_fast_smc(struct thread_smc_args *args)
 {
-	thread_check_canaries();
+//	thread_check_canaries();
 	thread_fast_smc_handler_ptr(args);
 	/* Fast handlers must not unmask any exceptions */
 	assert(thread_get_exceptions() == THREAD_EXCP_ALL);
@@ -593,7 +650,6 @@ void thread_handle_std_smc(struct thread_smc_args *args)
 void __weak __thread_std_smc_entry(struct thread_smc_args *args)
 {
 	update_curr_client(args->a7);
-
 	thread_std_smc_handler_ptr(args);
 
 	if (args->a0 == OPTEE_SMC_RETURN_OK) {
@@ -696,7 +752,9 @@ void thread_state_free(void)
 	threads[ct].flags = 0;
 	l->curr_thread = -1;
 
+	virt_mapper_unmap_client(get_client_context(threads[ct].hyp_clnt_id));
 	unlock_global();
+
 }
 
 #ifdef CFG_WITH_PAGER
@@ -757,6 +815,7 @@ int thread_state_suspend(uint32_t flags, uint32_t cpsr, vaddr_t pc)
 		core_mmu_get_user_map(&threads[ct].user_map);
 		core_mmu_set_user_map(NULL);
 	}
+//	virt_mapper_unmap_client(curr_client());
 
 	l->curr_thread = -1;
 
@@ -840,62 +899,10 @@ static void init_handlers(const struct thread_handlers *handlers)
 	thread_system_reset_handler_ptr = handlers->system_reset;
 }
 
-#ifdef CFG_WITH_PAGER
-static void init_thread_stacks(void)
-{
-	size_t n;
-
-	/*
-	 * Allocate virtual memory for thread stacks.
-	 */
-	for (n = 0; n < CFG_NUM_THREADS; n++) {
-		tee_mm_entry_t *mm;
-		vaddr_t sp;
-
-		/* Find vmem for thread stack and its protection gap */
-		mm = tee_mm_alloc(&kernel_mm_vcore,
-				  SMALL_PAGE_SIZE + STACK_THREAD_SIZE);
-		assert(mm);
-
-		/* Claim eventual physical page */
-		tee_pager_add_pages(tee_mm_get_smem(mm), tee_mm_get_size(mm),
-				    true);
-
-		/* Add the area to the pager */
-		tee_pager_add_core_area(tee_mm_get_smem(mm) + SMALL_PAGE_SIZE,
-					tee_mm_get_bytes(mm) - SMALL_PAGE_SIZE,
-					TEE_MATTR_PRW | TEE_MATTR_LOCKED | TEE_MATTR_TEE,
-					NULL, NULL);
-
-		/* init effective stack */
-		sp = tee_mm_get_smem(mm) + tee_mm_get_bytes(mm);
-		asan_tag_access((void *)tee_mm_get_smem(mm), (void *)sp);
-		if (!thread_init_stack(n, sp))
-			panic("init stack failed");
-	}
-}
-#else
-static void init_thread_stacks(void)
-{
-	size_t n;
-
-	/* Assign the thread stacks */
-	for (n = 0; n < CFG_NUM_THREADS; n++) {
-		if (!thread_init_stack(n, GET_STACK(stack_thread[n])))
-			panic("thread_init_stack failed");
-	}
-}
-#endif /*CFG_WITH_PAGER*/
-
 void thread_init_primary(const struct thread_handlers *handlers)
 {
 	init_handlers(handlers);
 
-	/* Initialize canaries around the stacks */
-	init_canaries();
-
-	init_thread_stacks();
-	pgt_init();
 }
 
 static void init_sec_mon(size_t pos __maybe_unused)
@@ -1210,22 +1217,22 @@ out:
 bool thread_enable_prealloc_rpc_cache(struct client_context *client_ctx)
 {
 	bool rv;
-	size_t n;
+	/* size_t n; */
 	uint32_t exceptions = thread_mask_exceptions(THREAD_EXCP_FOREIGN_INTR);
 
 	lock_global();
 
-	for (n = 0; n < CFG_NUM_THREADS; n++) {
-		if (threads[n].hyp_clnt_id == client_ctx->id &&
-		    threads[n].state != THREAD_STATE_FREE) {
-			rv = false;
-			goto out;
-		}
-	}
+	/* for (n = 0; n < CFG_NUM_THREADS; n++) { */
+	/* 	if (threads[n].hyp_clnt_id == client_ctx->id && */
+	/* 	    threads[n].state != THREAD_STATE_FREE) { */
+	/* 		rv = false; */
+	/* 		goto out; */
+	/* 	} */
+	/* } */
 
 	rv = true;
 	client_ctx->thread_prealloc_rpc_cache = true;
-out:
+/* out: */
 	unlock_global();
 	thread_unmask_exceptions(exceptions);
 	return rv;
@@ -1277,7 +1284,7 @@ struct mobj *thread_rpc_alloc_arg(size_t size, uint64_t *cookie)
 
 	if (!ALIGNMENT_IS_OK(pa, struct optee_msg_arg))
 		goto err;
-
+	DMSG("Alloc RPC ARG\n");
 	/* Check if this region is in static shared space */
 	if (core_pbuf_is(CORE_MEM_NSEC_SHM, pa, size))
 		mobj = mobj_shm_alloc(pa, size);

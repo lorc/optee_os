@@ -112,6 +112,7 @@
  * MEM_AREA_RES_VASPACE: Reserved virtual memory space
  * MEM_AREA_SHM_VASPACE: Virtual memory space for dynamic shared memory buffers
  * MEM_AREA_TA_VASPACE: TA va space, only used with phys_to_virt()
+ * MEM_AREA_SEC_RAM_VASPACE: Whole secure RAM as a linear block
  * MEM_AREA_MAXTYPE:  lower invalid 'type' value
  */
 enum teecore_memtypes {
@@ -135,6 +136,7 @@ enum teecore_memtypes {
 	MEM_AREA_TA_VASPACE,
 	MEM_AREA_PAGER_VASPACE,
 	MEM_AREA_SDP_MEM,
+	MEM_AREA_SEC_RAM_VASPACE,
 	MEM_AREA_MAXTYPE
 };
 
@@ -161,6 +163,7 @@ static inline const char *teecore_memtype_name(enum teecore_memtypes type)
 		[MEM_AREA_TA_VASPACE] = "TA_VASPACE",
 		[MEM_AREA_PAGER_VASPACE] = "PAGER_VASPACE",
 		[MEM_AREA_SDP_MEM] = "SDP_MEM",
+		[MEM_AREA_SEC_RAM_VASPACE] = "SEC_RAM",
 	};
 
 	COMPILE_TIME_ASSERT(ARRAY_SIZE(names) == MEM_AREA_MAXTYPE);
@@ -563,5 +566,13 @@ void core_mmu_set_discovered_nsec_ddr(struct core_mmu_phys_mem *start,
 /* Alloc and fill SDP memory objects table - table is NULL terminated */
 struct mobj **core_sdp_mem_create_mobjs(void);
 #endif
+
+/* Init memory allocator used by virtalization services */
+void core_mmu_init_virtualization(void);
+void core_mmu_set_tee_ram_pa(paddr_t pa);
+paddr_t core_mmu_copy_curr_mapping(uint64_t *tbl, int *num_tables,
+				   paddr_t ttbrs[CFG_TEE_CORE_NB_CORE]);
+void core_mmu_set_ttbr0(paddr_t ttbr0);
+void core_mmu_set_ttbr0_default(void);
 
 #endif /* CORE_MMU_H */

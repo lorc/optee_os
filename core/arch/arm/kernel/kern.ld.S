@@ -211,7 +211,7 @@ SECTIONS
 	. = ALIGN(SMALL_PAGE_SIZE);
 	__flatmap_unpg_ro_size = . - __flatmap_unpg_ro_start;
 	__flatmap_kern_rw_start = .;
-/* TODO: Move it back, create separate mapping for kernel */
+/* TODO: Move it back, create separate mapping for kernel (???) */
 	.kdata : ALIGN(8) {
 		*(.kdata .kdata.*)
 	}
@@ -220,19 +220,36 @@ SECTIONS
 		*(.kbss .kbss.*)
 		__kbss_end = .;
 	}
+	/* Provide space for copy of .data section */
+	__data_copy_start = .;
+	. += __data_end - __data_start;
+	__data_copy_end = .;
+
+	.kstack (NOLOAD) : {
+		__nozi_stack_start = .;
+		KEEP(*(.nozi_stack.stack_tmp .nozi_stack.stack_abt))
+		. = ALIGN(8);
+		__nozi_stack_end = .;
+	}
+
 	.kheap (NOLOAD) : {
 	       __kheap_start = .;
 	       . += CFG_CORE_HEAP_SIZE;
-	       . = ALIGN(SMALL_PAGE_SIZE);
+	       . = ALIGN(16 * 1024);
 	       __kheap_end = .;
 	}
-	__flatmap_kern_rw_size = . - __flatmap_kern_rw_start;
-	/* Start page aligned read-write memory */
-#ifdef CFG_CORE_RWDATA_NOEXEC
-	. = ALIGN(SMALL_PAGE_SIZE);
-#endif
+	.knozi (NOLOAD) : {
+		ASSERT(!( . & (16 * 1024 - 1)), "align nozi to 16kB");
+		KEEP(*(.nozi.mmu.l1 .nozi.mmu.l2))
+/*		KEEP(*(.nozi_stack))*/
+	}
 
+	. = ALIGN(SMALL_PAGE_SIZE);
+
+	__flatmap_kern_rw_size = . - __flatmap_kern_rw_start;
+	__flatmap_kern_rw_end = .;
 	__flatmap_unpg_rw_start = .;
+
 	.data : ALIGN(8) {
 		/* writable data  */
 		__data_start_rom = .;
@@ -257,7 +274,7 @@ SECTIONS
 	.dynamic : { *(.dynamic) }
 
 	/* unintialized data */
-	.bss : {
+	.bss : ALIGN(8) {
 		__data_end = .;
 		__bss_start = .;
 		*(.bss .bss.*)
@@ -294,10 +311,6 @@ SECTIONS
 		KEEP(*(.nozi .nozi.*))
 		. = ALIGN(16);
 		__nozi_end = .;
-		__nozi_stack_start = .;
-		KEEP(*(.nozi_stack))
-		. = ALIGN(8);
-		__nozi_stack_end = .;
 	}
 
 #ifdef CFG_WITH_PAGER

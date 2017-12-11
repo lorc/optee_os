@@ -527,14 +527,14 @@ struct bfhead {
 /*     {freelist, freelist} */
 /* }; */
 
-
+/* TODO: Store stats in pool struct */
 #ifdef BufStats
-static bufsize totalloc = 0;	      /* Total space currently allocated */
-static long numget = 0, numrel = 0;   /* Number of bget() and brel() calls */
+static bufsize totalloc __kbss = 0;	      /* Total space currently allocated */
+static long numget __kbss = 0, numrel __kbss = 0;   /* Number of bget() and brel() calls */
 #ifdef BECtl
-static long numpblk = 0;	      /* Number of pool blocks */
-static long numpget = 0, numprel = 0; /* Number of block gets and rels */
-static long numdget = 0, numdrel = 0; /* Number of direct gets and rels */
+static long numpblk __kbss = 0;	      /* Number of pool blocks */
+static long numpget __kbss= 0, numprel __kbss = 0; /* Number of block gets and rels */
+static long numdget __kbss = 0, numdrel __kbss = 0; /* Number of direct gets and rels */
 #endif /* BECtl */
 #endif /* BufStats */
 
@@ -546,8 +546,9 @@ static int (*compfcn) _((bufsize sizereq, int sequence)) = NULL;
 static void *(*acqfcn) _((bufsize size)) = NULL;
 static void (*relfcn) _((void *buf)) = NULL;
 
-static bufsize exp_incr = 0;	      /* Expansion block size */
-static bufsize pool_len = 0;	      /* 0: no bpool calls have been made
+/* TODO: Store this in pool struct */
+static bufsize exp_incr __kbss = 0;	      /* Expansion block size */
+static bufsize pool_len __kbss = 0;	      /* 0: no bpool calls have been made
 					 -1: not all pool blocks are
 					     the same size
 					 >0: (common) block size for all

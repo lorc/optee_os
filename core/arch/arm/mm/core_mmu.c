@@ -32,6 +32,7 @@
 #include <kernel/generic_boot.h>
 #include <kernel/linker.h>
 #include <kernel/panic.h>
+#include <kernel/virt_mapper.h>
 #include <kernel/tlb_helpers.h>
 #include <kernel/tee_l2cc_mutex.h>
 #include <kernel/tee_misc.h>
@@ -61,11 +62,11 @@
  */
 
 /* Default NSec shared memory allocated from NSec world */
-unsigned long default_nsec_shm_size;
-unsigned long default_nsec_shm_paddr;
+unsigned long default_nsec_shm_size __kbss;
+unsigned long default_nsec_shm_paddr __kbss;
 
 static struct tee_mmap_region
-	static_memory_map[CFG_MMAP_REGIONS + 1];
+	static_memory_map[CFG_MMAP_REGIONS + 1] __kbss;
 
 /* Define the platform's memory layout. */
 struct memaccess_area {
@@ -74,14 +75,14 @@ struct memaccess_area {
 };
 #define MEMACCESS_AREA(a, s) { .paddr = a, .size = s }
 
-static struct memaccess_area secure_only[] = {
+static struct memaccess_area secure_only[] __kdata = {
 #ifdef TZSRAM_BASE
 	MEMACCESS_AREA(TZSRAM_BASE, TZSRAM_SIZE),
 #endif
 	MEMACCESS_AREA(TZDRAM_BASE, TZDRAM_SIZE),
 };
 
-static struct memaccess_area nsec_shared[] = {
+static struct memaccess_area nsec_shared[] __kdata = {
 	MEMACCESS_AREA(CFG_SHMEM_START, CFG_SHMEM_SIZE),
 };
 
@@ -286,8 +287,8 @@ static void check_phys_mem_is_outside(struct core_mmu_phys_mem *start,
 	}
 }
 
-static const struct core_mmu_phys_mem *discovered_nsec_ddr_start;
-static size_t discovered_nsec_ddr_nelems;
+static const struct core_mmu_phys_mem *discovered_nsec_ddr_start __kbss;
+static size_t discovered_nsec_ddr_nelems __kbss;
 
 static int cmp_pmem_by_addr(const void *a, const void *b)
 {
@@ -622,6 +623,7 @@ uint32_t core_mmu_type_to_attr(enum teecore_memtypes t)
 	case MEM_AREA_RAM_NSEC:
 		return attr | TEE_MATTR_PRW | cached;
 	case MEM_AREA_RAM_SEC:
+	case MEM_AREA_SEC_RAM_VASPACE:
 		return attr | TEE_MATTR_SECURE | TEE_MATTR_PRW | cached;
 	case MEM_AREA_RES_VASPACE:
 	case MEM_AREA_SHM_VASPACE:
@@ -702,11 +704,12 @@ static void dump_mmap_table(struct tee_mmap_region *memory_map)
 
 		vstart = map->va + ((vaddr_t)map->pa & (map->region_size - 1));
 		DMSG("type %-12s va 0x%08" PRIxVA "..0x%08" PRIxVA
-		     " pa 0x%08" PRIxPA "..0x%08" PRIxPA " size 0x%08zx (%s)",
+		     " pa 0x%08" PRIxPA "..0x%08" PRIxPA " size 0x%08zx (%8s) (%6zdk)",
 		     teecore_memtype_name(map->type), vstart,
 		     vstart + map->size - 1, map->pa,
 		     (paddr_t)(map->pa + map->size - 1), map->size,
-		     map->region_size == SMALL_PAGE_SIZE ? "smallpg" : "pgdir");
+		     map->region_size == SMALL_PAGE_SIZE ? "smallpg" : "pgdir",
+			map->size / 1024);
 	}
 }
 
@@ -789,6 +792,9 @@ static void init_mem_map(struct tee_mmap_region *memory_map, size_t num_elems)
 
 	add_va_space(memory_map, num_elems, MEM_AREA_SHM_VASPACE,
 		     SHM_VASPACE_SIZE, &last);
+
+	add_va_space(memory_map, num_elems, MEM_AREA_SEC_RAM_VASPACE,
+		     ROUNDUP(TZDRAM_SIZE, SMALL_PAGE_SIZE), &last);
 
 	memory_map[last].type = MEM_AREA_END;
 
@@ -957,6 +963,9 @@ void core_init_mmu_map(void)
 		case MEM_AREA_RES_VASPACE:
 		case MEM_AREA_SHM_VASPACE:
 		case MEM_AREA_PAGER_VASPACE:
+			break;
+		case MEM_AREA_SEC_RAM_VASPACE:
+			map->pa = TZDRAM_BASE;
 			break;
 		default:
 			EMSG("Uhandled memtype %d", map->type);
@@ -1332,8 +1341,8 @@ TEE_Result core_mmu_map_pages(vaddr_t vstart, paddr_t *pages, size_t num_pages,
 	if (!mm || !va_is_in_map(mm, vaddr + num_pages * SMALL_PAGE_SIZE - 1))
 		panic("VA does not belong to any known mm region");
 
-	if (!core_mmu_is_dynamic_vaspace(mm))
-		panic("Trying to map into static region");
+	/* if (!core_mmu_is_dynamic_vaspace(mm)) */
+	/* 	panic("Trying to map into static region"); */
 
 	for (i = 0; i < num_pages; i++) {
 		if (pages[i] & SMALL_PAGE_MASK) {
@@ -1390,8 +1399,8 @@ void core_mmu_unmap_pages(vaddr_t vstart, size_t num_pages)
 	if (!mm || !va_is_in_map(mm, vstart + num_pages * SMALL_PAGE_SIZE - 1))
 		panic("VA does not belong to any known mm region");
 
-	if (!core_mmu_is_dynamic_vaspace(mm))
-		panic("Trying to unmap static region");
+	/* if (!core_mmu_is_dynamic_vaspace(mm)) */
+	/* 	panic("Trying to unmap static region"); */
 
 	for (i = 0; i < num_pages; i++, vstart += SMALL_PAGE_SIZE) {
 		if (!core_mmu_find_table(vstart, UINT_MAX, &tbl_info))
@@ -1621,7 +1630,7 @@ static void check_pa_matches_va(void *va, paddr_t pa)
 		if (p && pa != p) {
 			DMSG("va %p maps 0x%" PRIxPA ", expect 0x%" PRIxPA,
 					va, p, pa);
-			panic();
+			//panic();
 		}
 	} else {
 		if (pa) {
@@ -1657,7 +1666,7 @@ static void check_va_matches_pa(paddr_t pa, void *va)
 	p = virt_to_phys(va);
 	if (p != pa) {
 		DMSG("va %p maps 0x%" PRIxPA " expect 0x%" PRIxPA, va, p, pa);
-		panic();
+//		panic();
 	}
 }
 #else
@@ -1704,6 +1713,8 @@ static void *phys_to_virt_tee_ram(paddr_t pa)
 		mmap = find_map_by_type_and_pa(MEM_AREA_KERN_RAM_RW, pa);
 	if (!mmap)
 		mmap = find_map_by_type_and_pa(MEM_AREA_KERN_RAM, pa);
+	if (!mmap)
+		mmap = find_map_by_type_and_pa(MEM_AREA_SEC_RAM_VASPACE, pa);
 
 	return map_pa2va(mmap, pa);
 }
@@ -1723,6 +1734,7 @@ void *phys_to_virt(paddr_t pa, enum teecore_memtypes m)
 	case MEM_AREA_TEE_RAM_RX:
 	case MEM_AREA_TEE_RAM_RO:
 	case MEM_AREA_TEE_RAM_RW:
+	case MEM_AREA_SEC_RAM_VASPACE:
 		va = phys_to_virt_tee_ram(pa);
 		break;
 	case MEM_AREA_SHM_VASPACE:
@@ -1731,6 +1743,8 @@ void *phys_to_virt(paddr_t pa, enum teecore_memtypes m)
 		break;
 	default:
 		va = map_pa2va(find_map_by_type_and_pa(m, pa), pa);
+		if (!va)
+			va = phys_to_virt_tee_ram(pa);
 	}
 	check_va_matches_pa(pa, va);
 	return va;
@@ -1770,4 +1784,19 @@ vaddr_t core_mmu_get_va(paddr_t pa, enum teecore_memtypes type)
 		return (vaddr_t)phys_to_virt(pa, type);
 
 	return (vaddr_t)pa;
+}
+
+void core_mmu_init_virtualization(void)
+{
+	init_virt_mapper(static_memory_map);
+}
+
+void core_mmu_set_tee_ram_pa(paddr_t pa)
+{
+	struct tee_mmap_region *map;
+
+	map = find_map_by_type(MEM_AREA_TEE_RAM_RW);
+	assert(map);
+
+	map->pa = pa;
 }

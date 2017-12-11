@@ -39,6 +39,7 @@
 #include <kernel/panic.h>
 #include <kernel/tee_misc.h>
 #include <kernel/kmalloc.h>
+#include <kernel/virtualization.h>
 #include <kernel/thread.h>
 #include <malloc.h>
 #include <mm/core_memprot.h>
@@ -298,7 +299,7 @@ static void init_vcore(tee_mm_pool_t *mm_vcore)
 #endif
 
 	if (!tee_mm_init(mm_vcore, begin, end, SMALL_PAGE_SHIFT,
-			 TEE_MM_POOL_NO_FLAGS))
+			 TEE_MM_POOL_KMALLOC))
 		panic("tee_mm_vcore init failed");
 }
 
@@ -434,19 +435,26 @@ static void init_runtime(unsigned long pageable_part)
 }
 #else
 
+void init_tee_runtime(void)
+{
+	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
+	teecore_init_ta_ram();
+	pgt_init();
+	if (init_teecore() != TEE_SUCCESS)
+		panic();
+}
+
 static void init_runtime(unsigned long pageable_part __unused)
 {
-	thread_init_boot_thread();
+//	thread_init_boot_thread();
 
 	init_asan();
-	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
-	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
 
+	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
 	/*
 	 * Initialized at this stage in the pager version of this function
 	 * above
 	 */
-	teecore_init_ta_ram();
 	IMSG_RAW("\n");
 }
 #endif
@@ -851,10 +859,15 @@ static void init_primary_helper(unsigned long pageable_part,
 
 	main_init_gic();
 	init_vfp_nsec();
-	if (init_teecore() != TEE_SUCCESS)
-		panic();
 	reset_dt_references();
 	DMSG("Primary CPU switching to normal world boot\n");
+	DMSG("End of own RAM: %lx end: %lx\n", (unsigned long)_end_of_ram, (unsigned long)__end);
+	DMSG("TA RAM start: %x, TA RAM end: %x\n", CFG_TA_RAM_START,
+	     CFG_TA_RAM_START + CFG_TA_RAM_SIZE);
+	DMSG("Whole TA RAM size: %x Whole TA RAM end: %x\n", CFG_WHOLE_TA_RAM_SIZE,
+	     CFG_TA_RAM_START + CFG_WHOLE_TA_RAM_SIZE);
+	core_mmu_init_virtualization();
+	virtualization_init();
 }
 
 /* What this function is using is needed each time another CPU is started */

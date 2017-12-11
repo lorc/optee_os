@@ -26,6 +26,7 @@
  */
 
 #include <initcall.h>
+#include <kernel/generic_boot.h>
 #include <kernel/panic.h>
 #include <kernel/kmalloc.h>
 #include <kernel/spinlock.h>
@@ -37,9 +38,9 @@
 
 #ifdef CFG_VIRTUALIZATION
 
-static unsigned int ctx_list_lock = SPINLOCK_UNLOCK;
+static unsigned int ctx_list_lock __kdata = SPINLOCK_UNLOCK;
 
-static LIST_HEAD(ctx_list_head, client_context) ctx_list =
+static LIST_HEAD(ctx_list_head, client_context) ctx_list __kdata =
 	LIST_HEAD_INITIALIZER(ctx_list_head);
 
 struct client_context *curr_client(void)
@@ -92,6 +93,17 @@ int client_created(uint16_t client_id)
 
 	ctx->id = client_id;
 
+	if (virt_mapper_add_client(ctx)) {
+		kfree(ctx);
+		return OPTEE_SMC_RETURN_ENOTAVAIL;
+	}
+	thread_init_boot_thread();
+	/* Init TEE runtime */
+	init_tee_runtime();
+
+	thread_clr_boot_thread();
+	virt_mapper_unmap_client(ctx);
+
 	exceptions = cpu_spin_lock_xsave(&ctx_list_lock);
 	LIST_INSERT_HEAD(&ctx_list, ctx, next);
 	cpu_spin_unlock_xrestore(&ctx_list_lock, exceptions);
@@ -129,23 +141,20 @@ void client_destroyed(uint16_t client_id)
 	 * should be stopped.
 	 * TODO: Implement thread termination.
 	 */
+	virt_mapper_remove_client(ctx);
 	thread_force_free_prealloc_rpc_cache(ctx);
 
 	kfree(ctx);
 }
 
-static TEE_Result virtualization_init(void)
+void virtualization_init(void)
 {
 	/* Create context for hypervisor manually */
-	int ret = client_created(0);
+	/* int ret = client_created(0); */
 
-	if (ret)
-		panic("Can't create hypervisor client context");
-
-	return TEE_SUCCESS;
+	/* if (ret) */
+	/* 	panic("Can't create hypervisor client context"); */
 }
-
-service_init(virtualization_init);
 
 #else
 

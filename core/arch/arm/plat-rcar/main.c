@@ -65,7 +65,7 @@ static const struct thread_handlers handlers = {
 	.system_reset = pm_do_nothing,
 };
 
-static struct scif_uart_data console_data;
+static struct scif_uart_data console_data __kbss;
 
 const struct thread_handlers *generic_boot_get_handlers(void)
 {

@@ -63,4 +63,6 @@ paddr_t generic_boot_core_hpen(void);
 
 void *get_dt_blob(void);
 
+void init_tee_runtime(void);
+
 #endif /* KERNEL_GENERIC_BOOT_H */
