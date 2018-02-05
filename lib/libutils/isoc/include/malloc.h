@@ -81,4 +81,61 @@ void malloc_get_stats(struct malloc_stats *stats);
 void malloc_reset_stats(void);
 #endif /* CFG_WITH_STATS */
 
+
+#ifdef CFG_VIRTUALIZATION
+
+void kfree(void *ptr);
+
+#ifdef ENABLE_MDBG
+
+void *kmdbg_malloc(const char *fname, int lineno, size_t size);
+void *kmdbg_calloc(const char *fname, int lineno, size_t nmemb, size_t size);
+void *kmdbg_realloc(const char *fname, int lineno, void *ptr, size_t size);
+void *kmdbg_memalign(const char *fname, int lineno, size_t alignment,
+		size_t size);
+
+void kmdbg_check(int bufdump);
+
+#define kmalloc(size)	kmdbg_malloc(__FILE__, __LINE__, (size))
+#define kcalloc(nmemb, size) \
+		kmdbg_calloc(__FILE__, __LINE__, (nmemb), (size))
+#define krealloc(ptr, size) \
+		kmdbg_realloc(__FILE__, __LINE__, (ptr), (size))
+#define kmemalign(alignment, size) \
+		kmdbg_memalign(__FILE__, __LINE__, (alignment), (size))
+
+#else /* ENABLE_MDBG */
+
+void *kmalloc(size_t size);
+void *kcalloc(size_t nmemb, size_t size);
+void *krealloc(void *ptr, size_t size);
+void *kmemalign(size_t alignment, size_t size);
+
+#define kmdbg_check(x)        do { } while (0)
+
+#endif /* ENABLE_MDBG */
+
+bool kmalloc_buffer_is_within_alloced(void *buf, size_t len);
+bool kmalloc_buffer_overlaps_heap(void *buf, size_t len);
+void kmalloc_add_pool(void *buf, size_t len);
+
+#ifdef CFG_WITH_STATS
+/*
+ * Get/reset allocation statistics
+ */
+
+void kmalloc_get_stats(struct malloc_stats *stats);
+void kmalloc_reset_stats(void);
+
+#endif	/* CFG_WITH_STATS */
+#else  /* CFG_VIRTUALIZATION */
+
+#define kfree(ptr) free(ptr)
+#define kmalloc(size) malloc(size)
+#define kcalloc(nmemb, size) calloc(nmemb, size)
+#define krealloc(ptr, size) realloc(ptr, size)
+#define kmemalign(alignment, size) memalign(alignment, size)
+
+#endif	/* CFG_VIRTUALIZATION */
+
 #endif /* MALLOC_H */

@@ -451,6 +451,10 @@ static void init_runtime(unsigned long pageable_part __unused)
 	init_asan();
 	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
 
+#ifdef CFG_VIRTUALIZATION
+	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
+#endif
+
 	/*
 	 * Initialized at this stage in the pager version of this function
 	 * above

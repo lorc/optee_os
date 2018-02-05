@@ -85,6 +85,9 @@ extern const uint8_t __heap1_end[];
 extern uint8_t __heap2_start[];
 extern const uint8_t __heap2_end[];
 
+extern uint8_t __kheap_start[];
+extern const uint8_t __kheap_end[];
+
 extern const uint8_t __pageable_part_start[];
 extern const uint8_t __pageable_part_end[];
 extern const uint8_t __pageable_start[];
