@@ -21,7 +21,7 @@
 #define STATS_CMD_PAGER_STATS		0
 #define STATS_CMD_ALLOC_STATS		1
 
-#define STATS_NB_POOLS			3
+#define STATS_NB_POOLS			4
 
 static TEE_Result get_alloc_stats(uint32_t type, TEE_Param p[TEE_NUM_PARAMS])
 {
@@ -79,6 +79,13 @@ static TEE_Result get_alloc_stats(uint32_t type, TEE_Param p[TEE_NUM_PARAMS])
 			tee_mm_get_pool_stats(&tee_mm_sec_ddr, stats,
 					      !!p[0].value.b);
 			strlcpy(stats->desc, "Secure DDR", sizeof(stats->desc));
+			break;
+
+		case 4:
+			kmalloc_get_stats(stats);
+			strlcpy(stats->desc, "KHeap", sizeof(stats->desc));
+			if (p[0].value.b)
+				kmalloc_reset_stats();
 			break;
 
 		default:
