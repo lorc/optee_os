@@ -200,6 +200,10 @@ static void malloc_unlock(struct malloc_ctx *ctx __unused,
 
 static DEFINE_CTX(malloc_ctx);
 
+#ifdef CFG_VIRTUALIZATION
+static DEFINE_CTX(kmalloc_ctx);
+#endif
+
 #ifdef BufStats
 
 static void raw_malloc_return_hook(void *p, size_t requested_size,
@@ -237,7 +241,7 @@ void malloc_reset_stats(void)
 static void raw_malloc_get_stats(struct malloc_ctx *ctx,
 				 struct malloc_stats *stats)
 {
-	uint32_t exceptions = malloc_lock(&malloc_ctx);
+	uint32_t exceptions = malloc_lock(ctx);
 
 	memcpy(stats, &ctx->mstats, sizeof(*stats));
 	stats->allocated = ctx->poolset.totalloc;
@@ -1070,3 +1074,80 @@ bool malloc_buffer_overlaps_heap(void *buf, size_t len)
 {
 	return raw_malloc_buffer_overlaps_heap(&malloc_ctx, buf, len);
 }
+
+#ifdef CFG_VIRTUALIZATION
+
+void *kmalloc(size_t size)
+{
+	void *p;
+	uint32_t exceptions = malloc_lock(&kmalloc_ctx);
+
+	p = raw_malloc(0, 0, size, &kmalloc_ctx);
+	malloc_unlock(&kmalloc_ctx, exceptions);
+	return p;
+}
+
+void kfree(void *ptr)
+{
+	uint32_t exceptions = malloc_lock(&kmalloc_ctx);
+
+	raw_free(ptr, &kmalloc_ctx);
+	malloc_unlock(&kmalloc_ctx, exceptions);
+}
+
+void *kcalloc(size_t nmemb, size_t size)
+{
+	void *p;
+	uint32_t exceptions = malloc_lock(&kmalloc_ctx);
+
+	p = raw_calloc(0, 0, nmemb, size, &kmalloc_ctx);
+	malloc_unlock(&kmalloc_ctx, exceptions);
+	return p;
+}
+
+void *krealloc(void *ptr, size_t size)
+{
+	void *p;
+	uint32_t exceptions = malloc_lock(&kmalloc_ctx);
+
+	p = realloc_unlocked(&kmalloc_ctx, ptr, size);
+	malloc_unlock(&kmalloc_ctx, exceptions);
+	return p;
+}
+
+void *kmemalign(size_t alignment, size_t size)
+{
+	void *p;
+	uint32_t exceptions = malloc_lock(&kmalloc_ctx);
+
+	p = raw_memalign(0, 0, alignment, size, &kmalloc_ctx);
+	malloc_unlock(&kmalloc_ctx, exceptions);
+	return p;
+}
+
+void kmalloc_add_pool(void *buf, size_t len)
+{
+	raw_malloc_add_pool(&kmalloc_ctx, buf, len);
+}
+
+bool kmalloc_buffer_is_within_alloced(void *buf, size_t len)
+{
+	return raw_malloc_buffer_is_within_alloced(&kmalloc_ctx, buf, len);
+}
+
+bool kmalloc_buffer_overlaps_heap(void *buf, size_t len)
+{
+	return raw_malloc_buffer_overlaps_heap(&kmalloc_ctx, buf, len);
+}
+
+void kmalloc_reset_stats(void)
+{
+	raw_malloc_reset_stats(&kmalloc_ctx);
+}
+
+void kmalloc_get_stats(struct malloc_stats *stats)
+{
+	raw_malloc_get_stats(&kmalloc_ctx, stats);
+}
+
+#endif
