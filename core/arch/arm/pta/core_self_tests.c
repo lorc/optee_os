@@ -393,13 +393,129 @@ static int self_test_malloc(void)
 	return ret;
 }
 
+#ifdef CFG_VIRTUALIZATION
+/* test kmalloc support. resulting trace shall be manually checked */
+static int self_test_kmalloc(void)
+{
+	char *p1 = NULL, *p2 = NULL;
+	int *p3 = NULL, *p4 = NULL;
+	bool r;
+	int ret = 0;
+
+	LOG("kmalloc tests (kmalloc, kfree, kcalloc, krealloc, kmemalign):");
+	LOG("  p1=%p  p2=%p  p3=%p  p4=%p",
+	    (void *)p1, (void *)p2, (void *)p3, (void *)p4);
+	/* test malloc */
+	p1 = kmalloc(1024);
+	LOG("- p1 = kmalloc(1024)");
+	p2 = kmalloc(1024);
+	LOG("- p2 = kmalloc(1024)");
+	LOG("  p1=%p  p2=%p  p3=%p  p4=%p",
+	    (void *)p1, (void *)p2, (void *)p3, (void *)p4);
+	r = (p1 && p2 && kmalloc_buffer_is_within_alloced(p1, 1024) &&
+		!kmalloc_buffer_is_within_alloced(p1 + 25, 1000) &&
+		!kmalloc_buffer_is_within_alloced(p1 - 25, 500) &&
+		kmalloc_buffer_overlaps_heap(p1 - 25, 500));
+	if (!r)
+		ret = -1;
+	LOG("  => test %s", r ? "ok" : "FAILED");
+	LOG("");
+
+	/* test realloc */
+	p1 = krealloc(p1, 3 * 1024);
+	LOG("- p1 = krealloc(p1, 3*1024)");
+	LOG("- free p2");
+	kfree(p2);
+	p2 = kmalloc(1024);
+	LOG("- p2 = kmalloc(1024)");
+	LOG("  p1=%p  p2=%p  p3=%p  p4=%p",
+	    (void *)p1, (void *)p2, (void *)p3, (void *)p4);
+	r = (p1 && p2);
+	if (!r)
+		ret = -1;
+	LOG("  => test %s", r ? "ok" : "FAILED");
+	LOG("");
+	LOG("- kfree p1, p2");
+	kfree(p1);
+	kfree(p2);
+	p1 = NULL;
+	p2 = NULL;
+
+	/* test calloc */
+	p3 = kcalloc(4, 1024);
+	p4 = kcalloc(0x100, 1024 * 1024);
+	LOG("- p3 = kcalloc(4, 1024)");
+	LOG("- p4 = kcalloc(0x100, 1024*1024)   too big: should fail!");
+	LOG("  p1=%p  p2=%p  p3=%p  p4=%p",
+	    (void *)p1, (void *)p2, (void *)p3, (void *)p4);
+	r = (p3 && !p4);
+	if (!r)
+		ret = -1;
+	LOG("  => test %s", r ? "ok" : "FAILED");
+	LOG("");
+	LOG("- kfree p3, p4");
+	kfree(p3);
+	kfree(p4);
+	p3 = NULL;
+	p4 = NULL;
+
+	/* test memalign */
+	p3 = kmemalign(0x1000, 1024);
+	LOG("- p3 = kmemalign(%d, 1024)", 0x1000);
+	p1 = kmalloc(1024);
+	LOG("- p1 = kmalloc(1024)");
+	p4 = kmemalign(0x100, 512);
+	LOG("- p4 = kmemalign(%d, 512)", 0x100);
+	LOG("  p1=%p  p2=%p  p3=%p  p4=%p",
+	    (void *)p1, (void *)p2, (void *)p3, (void *)p4);
+	r = (p1 && p3 && p4 &&
+	    !((vaddr_t)p3 % 0x1000) && !((vaddr_t)p4 % 0x100));
+	if (!r)
+		ret = -1;
+	LOG("  => test %s", r ? "ok" : "FAILED");
+	LOG("");
+	LOG("- kfree p1, p3, p4");
+	kfree(p1);
+	kfree(p3);
+	kfree(p4);
+	p1 = NULL;
+	p3 = NULL;
+	p4 = NULL;
+
+	/* test memalign with invalid alignments */
+	p3 = kmemalign(100, 1024);
+	LOG("- p3 = kmemalign(%d, 1024)", 100);
+	p4 = kmemalign(0, 1024);
+	LOG("- p4 = kmemalign(%d, 1024)", 0);
+	LOG("  p1=%p  p2=%p  p3=%p  p4=%p",
+	    (void *)p1, (void *)p2, (void *)p3, (void *)p4);
+	r = (!p3 && !p4);
+	if (!r)
+		ret = -1;
+	LOG("  => test %s", r ? "ok" : "FAILED");
+	LOG("");
+	LOG("- kfree p3, p4");
+	kfree(p3);
+	kfree(p4);
+	p3 = NULL;
+	p4 = NULL;
+
+	/* test free(NULL) */
+	LOG("- kfree NULL");
+	kfree(NULL);
+	LOG("");
+	LOG("kmalloc test done");
+
+	return ret;
+}
+#endif
 /* exported entry points for some basic test */
 TEE_Result core_self_tests(uint32_t nParamTypes __unused,
 		TEE_Param pParams[TEE_NUM_PARAMS] __unused)
 {
 	if (self_test_mul_signed_overflow() || self_test_add_overflow() ||
 	    self_test_sub_overflow() || self_test_mul_unsigned_overflow() ||
-	    self_test_division() || self_test_malloc()) {
+	    self_test_division() || self_test_malloc() || self_test_kmalloc()) {
 		EMSG("some self_test_xxx failed! you should enable local LOG");
 		return TEE_ERROR_GENERIC;
 	}
