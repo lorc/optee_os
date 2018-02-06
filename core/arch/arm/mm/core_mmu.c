@@ -43,11 +43,11 @@
  */
 
 /* Default NSec shared memory allocated from NSec world */
-unsigned long default_nsec_shm_size;
-unsigned long default_nsec_shm_paddr;
+unsigned long default_nsec_shm_size __kbss;
+unsigned long default_nsec_shm_paddr __kbss;
 
 static struct tee_mmap_region
-	static_memory_map[CFG_MMAP_REGIONS + 1];
+	static_memory_map[CFG_MMAP_REGIONS + 1] __kbss;
 
 /* Define the platform's memory layout. */
 struct memaccess_area {
@@ -56,14 +56,14 @@ struct memaccess_area {
 };
 #define MEMACCESS_AREA(a, s) { .paddr = a, .size = s }
 
-static struct memaccess_area secure_only[] = {
+static struct memaccess_area secure_only[]  __kdata= {
 #ifdef TZSRAM_BASE
 	MEMACCESS_AREA(TZSRAM_BASE, TZSRAM_SIZE),
 #endif
 	MEMACCESS_AREA(TZDRAM_BASE, TZDRAM_SIZE),
 };
 
-static struct memaccess_area nsec_shared[] = {
+static struct memaccess_area nsec_shared[] __kdata = {
 	MEMACCESS_AREA(TEE_SHMEM_START, TEE_SHMEM_SIZE),
 };
 
@@ -286,8 +286,8 @@ static void check_phys_mem_is_outside(struct core_mmu_phys_mem *start,
 	}
 }
 
-static const struct core_mmu_phys_mem *discovered_nsec_ddr_start;
-static size_t discovered_nsec_ddr_nelems;
+static const struct core_mmu_phys_mem *discovered_nsec_ddr_start __kbss;
+static size_t discovered_nsec_ddr_nelems __kbss;
 
 static int cmp_pmem_by_addr(const void *a, const void *b)
 {

@@ -74,7 +74,7 @@ KEEP_PAGER(sem_cpu_sync);
 #endif
 
 #ifdef CFG_DT
-static void *dt_blob_addr;
+static void *dt_blob_addr __kbss;
 #endif
 
 #ifdef CFG_SECONDARY_INIT_CNTFRQ
