@@ -211,6 +211,41 @@ SECTIONS
 	. = ALIGN(SMALL_PAGE_SIZE);
 #endif
 	__flatmap_unpg_ro_size = . - __flatmap_unpg_ro_start;
+
+#ifdef CFG_VIRTUALIZATION
+	__flatmap_kern_rw_start = . ;
+	.kdata : ALIGN(8) {
+		*(.kdata .kdata.*)
+	}
+	.kbss : ALIGN(8) {
+		__kbss_start = .;
+		*(.kbss .kbss.*)
+		__kbss_end = .;
+	}
+	.kstack (NOLOAD) : {
+		__nozi_stack_start = .;
+		KEEP(*(.nozi_stack.stack_tmp .nozi_stack.stack_abt))
+		. = ALIGN(8);
+		__nozi_stack_end = .;
+	}
+
+	.kheap (NOLOAD) : {
+		__kheap_start = .;
+		. += CFG_CORE_KHEAP_SIZE;
+		. = ALIGN(16 * 1024);
+		__kheap_end = .;
+	}
+	.knozi (NOLOAD) : {
+		ASSERT(!( . & (16 * 1024 - 1)), "align nozi to 16kB");
+		KEEP(*(.nozi.mmu.l1 .nozi.mmu.l2))
+	}
+
+	. = ALIGN(SMALL_PAGE_SIZE);
+
+	__flatmap_kern_rw_size = . - __flatmap_kern_rw_start;
+	__flatmap_kern_rw_end = .;
+#endif
+
 	__flatmap_unpg_rw_start = .;
 
 	.data : ALIGN(8) {
@@ -257,20 +292,9 @@ SECTIONS
 #ifndef CFG_WITH_PAGER
 		. += CFG_CORE_HEAP_SIZE;
 #endif
-#ifndef CFG_VIRTUALIZATION
 		. = ALIGN(16 * 1024);
-#endif
 		__heap1_end = .;
 	}
-
-#ifdef CFG_VIRTUALIZATION
-	.kheap (NOLOAD) : {
-		__kheap_start = . ;
-		. += CFG_CORE_KHEAP_SIZE;
-		. = ALIGN(16 * 1024);
-		__kheap_end = . ;
-	}
-#endif
 	/*
 	 * Uninitialized data that shouldn't be zero initialized at
 	 * runtime.
@@ -284,10 +308,12 @@ SECTIONS
 		KEEP(*(.nozi .nozi.*))
 		. = ALIGN(16);
 		__nozi_end = .;
+#ifndef CFG_VIRTUALIZATION
 		__nozi_stack_start = .;
 		KEEP(*(.nozi_stack))
 		. = ALIGN(8);
 		__nozi_stack_end = .;
+#endif
 	}
 
 #ifdef CFG_WITH_PAGER
@@ -475,6 +501,10 @@ __vcore_unpg_ro_size = 0;
 /* Unpaged read-write memory */
 __vcore_unpg_rw_start = __flatmap_unpg_rw_start;
 __vcore_unpg_rw_size = __flatmap_unpg_rw_size;
+
+/* Kernel read-write memory */
+PROVIDE(__vcore_kern_rw_start = __flatmap_kern_rw_start);
+PROVIDE(__vcore_kern_rw_size = __flatmap_kern_rw_size);
 
 #ifdef CFG_WITH_PAGER
 /*

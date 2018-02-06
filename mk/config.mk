@@ -330,3 +330,12 @@ CFG_TA_MBEDTLS ?= y
 # Compile the TA library mbedTLS with self test functions, the functions
 # need to be called to test anything
 CFG_TA_MBEDTLS_SELF_TEST ?= y
+
+# Enable virtualization support. OP-TEE will not work without compatible
+# hypervisor if this option is enabled.
+CFG_VIRTUALIZATION ?= n
+
+ifeq ($(CFG_VIRTUALIZATION),y)
+$(call force,CFG_CORE_RODATA_NOEXEC,y)
+$(call force,CFG_CORE_RWDATA_NOEXEC,y)
+endif

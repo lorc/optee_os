@@ -386,6 +386,21 @@ clear_bss:
 	cmp	r0, r1
 	bls	clear_bss
 
+#ifdef CFG_VIRTUALIZATION
+	/*
+	 * Clear .kbss, this code obviously depends on the linker keeping
+	 * start/end of .bss at least 8 byte aligned.
+	 */
+	ldr	r0, =__kbss_start
+	ldr	r1, =__kbss_end
+	mov	r2, #0
+	mov	r3, #0
+clear_kbss:
+	stmia	r0!, {r2, r3}
+	cmp	r0, r1
+	bls	clear_kbss
+#endif
+
 #ifdef CFG_CORE_SANITIZE_KADDRESS
 	/* First initialize the entire shadow area with no access */
 	ldr	r0, =__asan_shadow_start	/* start */
