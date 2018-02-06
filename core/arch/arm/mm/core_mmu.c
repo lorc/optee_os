@@ -101,6 +101,9 @@ register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, CFG_TEE_RAM_START,
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RX, VCORE_UNPG_RX_PA, VCORE_UNPG_RX_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, VCORE_UNPG_RO_PA, VCORE_UNPG_RO_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RW, VCORE_UNPG_RW_PA, VCORE_UNPG_RW_SZ);
+#ifdef CFG_VIRTUALIZATION
+register_phys_mem_ul(MEM_AREA_KERN_RAM_RW, VCORE_KERN_RW_PA, VCORE_KERN_RW_SZ);
+#endif
 #ifdef CFG_WITH_PAGER
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RX, VCORE_INIT_RX_PA, VCORE_INIT_RX_SZ);
 register_phys_mem_ul(MEM_AREA_TEE_RAM_RO, VCORE_INIT_RO_PA, VCORE_INIT_RO_SZ);
@@ -612,6 +615,7 @@ uint32_t core_mmu_type_to_attr(enum teecore_memtypes t)
 	case MEM_AREA_TEE_RAM_RO:
 		return attr | TEE_MATTR_SECURE | TEE_MATTR_PR | cached;
 	case MEM_AREA_TEE_RAM_RW:
+	case MEM_AREA_KERN_RAM_RW:
 	case MEM_AREA_TEE_ASAN:
 		return attr | TEE_MATTR_SECURE | TEE_MATTR_PRW | cached;
 	case MEM_AREA_TEE_COHERENT:
@@ -645,6 +649,7 @@ static bool __maybe_unused map_is_tee_ram(const struct tee_mmap_region *mm)
 	case MEM_AREA_TEE_RAM_RX:
 	case MEM_AREA_TEE_RAM_RO:
 	case MEM_AREA_TEE_RAM_RW:
+	case MEM_AREA_KERN_RAM_RW:
 	case MEM_AREA_TEE_ASAN:
 		return true;
 	default:
@@ -999,6 +1004,7 @@ void core_init_mmu_map(void)
 		case MEM_AREA_TEE_RAM_RX:
 		case MEM_AREA_TEE_RAM_RO:
 		case MEM_AREA_TEE_RAM_RW:
+		case MEM_AREA_KERN_RAM_RW:
 			if (!pbuf_is_inside(secure_only, map->pa, map->size))
 				panic("TEE_RAM can't fit in secure_only");
 			break;
@@ -1848,6 +1854,8 @@ static void *phys_to_virt_tee_ram(paddr_t pa)
 
 	mmap = find_map_by_type_and_pa(MEM_AREA_TEE_RAM, pa);
 	if (!mmap)
+		mmap = find_map_by_type_and_pa(MEM_AREA_KERN_RAM_RW, pa);
+	if (!mmap)
 		mmap = find_map_by_type_and_pa(MEM_AREA_TEE_RAM_RW, pa);
 	if (!mmap)
 		mmap = find_map_by_type_and_pa(MEM_AREA_TEE_RAM_RO, pa);
@@ -1870,6 +1878,7 @@ void *phys_to_virt(paddr_t pa, enum teecore_memtypes m)
 	case MEM_AREA_TEE_RAM_RX:
 	case MEM_AREA_TEE_RAM_RO:
 	case MEM_AREA_TEE_RAM_RW:
+	case MEM_AREA_KERN_RAM_RW:
 		va = phys_to_virt_tee_ram(pa);
 		break;
 	case MEM_AREA_SHM_VASPACE:

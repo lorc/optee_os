@@ -312,3 +312,8 @@ CFG_CORE_LARGE_PHYS_ADDR ?= n
 # Enable virtualization support. OP-TEE will not work without compatible
 # hypervisor if this option is enabled.
 CFG_VIRTUALIZATION ?= n
+
+ifeq ($(CFG_VIRTUALIZATION),y)
+$(call force,CFG_CORE_RODATA_NOEXEC,y)
+$(call force,CFG_CORE_RWDATA_NOEXEC,y)
+endif
