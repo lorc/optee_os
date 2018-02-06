@@ -201,7 +201,7 @@ static void malloc_unlock(struct malloc_ctx *ctx __unused,
 static DEFINE_CTX(malloc_ctx);
 
 #ifdef CFG_VIRTUALIZATION
-static DEFINE_CTX(kmalloc_ctx);
+static __kdata DEFINE_CTX(kmalloc_ctx);
 #endif
 
 #ifdef BufStats

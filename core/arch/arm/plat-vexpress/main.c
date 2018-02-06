@@ -72,8 +72,8 @@ static const struct thread_handlers handlers = {
 #endif
 };
 
-static struct gic_data gic_data;
-static struct pl011_data console_data;
+static struct gic_data gic_data __kbss;
+static struct pl011_data console_data __kbss;
 
 #if defined(PLATFORM_FLAVOR_fvp)
 register_phys_mem(MEM_AREA_RAM_SEC, TZCDRAM_BASE, TZCDRAM_SIZE);

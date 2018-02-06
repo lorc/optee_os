@@ -92,7 +92,7 @@
 
 struct thread_ctx threads[CFG_NUM_THREADS];
 
-struct thread_core_local thread_core_local[CFG_TEE_CORE_NB_CORE];
+struct thread_core_local thread_core_local[CFG_TEE_CORE_NB_CORE] __kbss;
 
 #ifdef CFG_WITH_STACK_CANARIES
 #ifdef ARM32
@@ -128,9 +128,9 @@ DECLARE_STACK(stack_abt, CFG_TEE_CORE_NB_CORE, STACK_ABT_SIZE, static);
 DECLARE_STACK(stack_thread, CFG_NUM_THREADS, STACK_THREAD_SIZE, static);
 #endif
 
-const void *stack_tmp_export = (uint8_t *)stack_tmp + sizeof(stack_tmp[0]) -
-			       (STACK_TMP_OFFS + STACK_CANARY_SIZE / 2);
-const uint32_t stack_tmp_stride = sizeof(stack_tmp[0]);
+const void *stack_tmp_export = (uint8_t *)stack_tmp +
+	sizeof(stack_tmp[0]) - (STACK_TMP_OFFS + STACK_CANARY_SIZE / 2);
+const uint32_t stack_tmp_stride  = sizeof(stack_tmp[0]);
 
 /*
  * These stack setup info are required by secondary boot cores before they
@@ -139,23 +139,23 @@ const uint32_t stack_tmp_stride = sizeof(stack_tmp[0]);
 KEEP_PAGER(stack_tmp_export);
 KEEP_PAGER(stack_tmp_stride);
 
-thread_smc_handler_t thread_std_smc_handler_ptr;
-static thread_smc_handler_t thread_fast_smc_handler_ptr;
-thread_nintr_handler_t thread_nintr_handler_ptr;
-thread_pm_handler_t thread_cpu_on_handler_ptr;
-thread_pm_handler_t thread_cpu_off_handler_ptr;
-thread_pm_handler_t thread_cpu_suspend_handler_ptr;
-thread_pm_handler_t thread_cpu_resume_handler_ptr;
-thread_pm_handler_t thread_system_off_handler_ptr;
-thread_pm_handler_t thread_system_reset_handler_ptr;
+thread_smc_handler_t thread_std_smc_handler_ptr __kbss;
+static thread_smc_handler_t thread_fast_smc_handler_ptr __kbss;
+thread_nintr_handler_t thread_nintr_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_on_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_off_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_suspend_handler_ptr __kbss;
+thread_pm_handler_t thread_cpu_resume_handler_ptr __kbss;
+thread_pm_handler_t thread_system_off_handler_ptr __kbss;
+thread_pm_handler_t thread_system_reset_handler_ptr __kbss;
 
 #ifdef CFG_CORE_UNMAP_CORE_AT_EL0
-static vaddr_t thread_user_kcode_va;
-long thread_user_kcode_offset;
-static size_t thread_user_kcode_size;
+static vaddr_t thread_user_kcode_va __kbss;
+long thread_user_kcode_offset __kbss;
+static size_t thread_user_kcode_size  __kbss;
 #endif /*CFG_CORE_UNMAP_CORE_AT_EL0*/
 
-static unsigned int thread_global_lock = SPINLOCK_UNLOCK;
+static unsigned int thread_global_lock  __kbss = SPINLOCK_UNLOCK;
 static bool thread_prealloc_rpc_cache;
 
 static void init_canaries(void)
