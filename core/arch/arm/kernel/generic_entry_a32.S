@@ -393,6 +393,19 @@ clear_kbss:
 	stmia	r0!, {r2, r3}
 	cmp	r0, r1
 	bls	clear_kbss
+
+	/*
+	 * Copy .data into backup area. Linker should keep .data section
+	 * at least 8 byte aligned.
+	 */
+	ldr	r0, =__data_start	/* src */
+	ldr	r1, =__data_end 	/* src limit */
+	ldr	r2, =__data_copy_start	/* dst */
+copy_data:
+	ldmia	r1!, {r3, r4}
+	stmia	r0!, {r3, r4}
+	cmp	r0, r1
+	blt	copy_data
 #endif
 
 #ifdef CFG_CORE_SANITIZE_KADDRESS

@@ -110,6 +110,20 @@ clear_kbss:
 	str	xzr, [x0], #8
 	cmp	x0, x1
 	b.lt	clear_kbss
+
+	/*
+	 * Copy .data into backup area. Linker should keep .data section
+	 * at least 8 byte aligned.
+	 */
+	adr	x0, __data_start
+	adr	x1, __data_end
+	adr	x2, __data_copy_start
+copy_data:
+	ldr	x3, [x0], #8
+	str	x3, [x2], #8
+	cmp	x0, x1
+	b.lt	copy_data
+
 #endif
 
 	/* Setup SP_EL0 and SP_EL1, SP will be set to SP_EL0 */

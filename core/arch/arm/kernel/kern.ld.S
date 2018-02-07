@@ -228,6 +228,12 @@ SECTIONS
 		*(.kbss .kbss.*)
 		__kbss_end = .;
 	}
+
+	/* Provide space for copy of .data section */
+	__data_copy_start = .;
+	. += __data_end - __data_start;
+	__data_copy_end = .;
+
 	.kstack (NOLOAD) : {
 		__nozi_stack_start = .;
 		KEEP(*(.nozi_stack.stack_tmp .nozi_stack.stack_abt))
