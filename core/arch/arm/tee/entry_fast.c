@@ -159,7 +159,7 @@ static void tee_entry_boot_secondary(struct thread_smc_args *args)
 #if defined(CFG_VIRTUALIZATION)
 static void tee_entry_vm_created(struct thread_smc_args *args)
 {
-	uint16_t client_id = args->a1;
+	uint16_t guest_id = args->a1;
 
 	/* Only hypervisor can issue this request */
 	if (args->a7 != 0) {
@@ -167,18 +167,18 @@ static void tee_entry_vm_created(struct thread_smc_args *args)
 		return;
 	}
 
-	args->a0 = client_created(client_id);
+	args->a0 = virt_guest_created(guest_id);
 }
 
 static void tee_entry_vm_destroyed(struct thread_smc_args *args)
 {
-	uint16_t client_id = args->a1;
+	uint16_t guest_id = args->a1;
 
 	/* Only hypervisor can issue this request */
 	if (args->a7 != 0)
 		return;
 
-	client_destroyed(client_id);
+	virt_guest_destroyed(guest_id);
 	args->a0 = OPTEE_SMC_RETURN_OK;
 }
 #endif

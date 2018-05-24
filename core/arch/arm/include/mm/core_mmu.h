@@ -126,6 +126,7 @@
  * MEM_AREA_SHM_VASPACE: Virtual memory space for dynamic shared memory buffers
  * MEM_AREA_TA_VASPACE: TA va space, only used with phys_to_virt()
  * MEM_AREA_DDR_OVERALL: Overall DDR address range, candidate to dynamic shm.
+ * MEM_AREA_SEC_RAM_OVERALL: Whole secure RAM
  * MEM_AREA_MAXTYPE:  lower invalid 'type' value
  */
 enum teecore_memtypes {
@@ -149,6 +150,7 @@ enum teecore_memtypes {
 	MEM_AREA_PAGER_VASPACE,
 	MEM_AREA_SDP_MEM,
 	MEM_AREA_DDR_OVERALL,
+	MEM_AREA_SEC_RAM_OVERALL,
 	MEM_AREA_MAXTYPE
 };
 
@@ -174,7 +176,8 @@ static inline const char *teecore_memtype_name(enum teecore_memtypes type)
 		[MEM_AREA_TA_VASPACE] = "TA_VASPACE",
 		[MEM_AREA_PAGER_VASPACE] = "PAGER_VASPACE",
 		[MEM_AREA_SDP_MEM] = "SDP_MEM",
-		[MEM_AREA_DDR_OVERALL] = "DDR_OVERALL"
+		[MEM_AREA_DDR_OVERALL] = "DDR_OVERALL",
+		[MEM_AREA_SEC_RAM_OVERALL] = "SEC_RAM_OVERALL",
 	};
 
 	COMPILE_TIME_ASSERT(ARRAY_SIZE(names) == MEM_AREA_MAXTYPE);
@@ -306,6 +309,17 @@ static inline bool core_mmu_user_va_range_is_defined(void)
 #endif
 
 /*
+ * struct mmu_context - stores whole MMU context
+ *
+ * This is opaque struct which is defined differently for
+ * v7 and lpae MMUs
+ *
+ * This structure used mostly when virtualization is enabled.
+ * If CFG_VIRTUALIZATION==n, then only default context exists.
+ */
+struct mmu_context;
+
+/*
  * core_mmu_get_user_va_range() - Return range of user va space
  * @base:	Lowest user virtual address
  * @size:	Size in bytes of user address space
@@ -382,17 +396,20 @@ struct core_mmu_table_info {
 	unsigned level;
 	unsigned shift;
 	unsigned num_entries;
+	struct mmu_context *ctx;
 };
 
 /*
  * core_mmu_find_table() - Locates a translation table
+ * @ctx:	MMU context where search for table
  * @va:		Virtual address for the table to cover
  * @max_level:	Don't traverse beyond this level
  * @tbl_info:	Pointer to where to store properties.
  * @return true if a translation table was found, false on error
  */
-bool core_mmu_find_table(vaddr_t va, unsigned max_level,
-		struct core_mmu_table_info *tbl_info);
+bool core_mmu_find_table(struct mmu_context* ctx, vaddr_t va,
+			 unsigned max_level,
+			 struct core_mmu_table_info *tbl_info);
 
 /*
  * core_mmu_entry_to_finer_grained() - divide mapping at current level into
@@ -582,9 +599,30 @@ bool core_mmu_nsec_ddr_is_defined(void);
 void core_mmu_set_discovered_nsec_ddr(struct core_mmu_phys_mem *start,
 				      size_t nelems);
 
+/* Initialize MMU context */
+void core_init_mmu_ctx(struct mmu_context *ctx, struct tee_mmap_region *mm);
+
+unsigned int asid_alloc(void);
+void asid_free(unsigned int asid);
+
 #ifdef CFG_SECURE_DATA_PATH
 /* Alloc and fill SDP memory objects table - table is NULL terminated */
 struct mobj **core_sdp_mem_create_mobjs(void);
+#endif
+
+#ifdef CFG_VIRTUALIZATION
+size_t core_mmu_get_total_pages_size(void);
+struct mmu_context *core_alloc_mmu_ctx(void *tables);
+void core_free_mmu_ctx(struct mmu_context *ctx);
+void core_mmu_set_ctx(struct mmu_context *ctx);
+void core_mmu_set_default_ctx(void);
+
+void core_mmu_init_virtualization(void);
+bool core_mmu_set_map_pa(enum teecore_memtypes memtype, paddr_t pa);
+
+#else
+static __maybe_unused void core_mmu_init_virtualization(void)  {}
+static __maybe_unused void core_mmu_reset_ctx(void)  {}
 #endif
 
 #endif /*ASM*/

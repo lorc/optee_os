@@ -69,8 +69,10 @@ extern const uint8_t __end[];
 extern const initcall_t __initcall_start;
 extern const initcall_t __initcall_end;
 
-extern const uint8_t __data_start[];
+extern uint8_t __data_start[];
 extern const uint8_t __data_end[];
+extern uint8_t __data_copy_start[];
+extern const uint8_t __data_copy_end[];
 extern const uint8_t __rodata_start[];
 extern const uint8_t __rodata_end[];
 extern const uint8_t __bss_start[];

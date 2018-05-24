@@ -50,6 +50,7 @@
  */
 
 #include <platform_config.h>
+#include <mm/core_mmu.h>
 
 #ifndef SMALL_PAGE_SIZE
 #define SMALL_PAGE_SIZE		4096
@@ -249,7 +250,7 @@ SECTIONS
 	}
 	.knozi (NOLOAD) : {
 		ASSERT(!( . & (16 * 1024 - 1)), "align nozi to 16kB");
-		KEEP(*(.nozi.mmu.l1 .nozi.mmu.l2))
+		KEEP(*(.nozi.mmu.l1 .nozi.mmu.l2 .nozi.mmu.l2tee))
 	}
 
 	. = ALIGN(SMALL_PAGE_SIZE);

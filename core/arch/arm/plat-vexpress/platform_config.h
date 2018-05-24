@@ -232,7 +232,7 @@
 
 #endif /* CFG_WITH_PAGER */
 
-#define CFG_TEE_CORE_NB_CORE	2
+#define CFG_TEE_CORE_NB_CORE	8
 
 /*
  * CFG_SHMEM_START chosen arbitrary, in a way that it does not interfere
@@ -245,7 +245,7 @@
 #error "Unknown platform flavor"
 #endif
 
-#define CFG_TEE_RAM_VA_SIZE	(2 * 1024 * 1024)
+#define CFG_TEE_RAM_VA_SIZE  (2 * 1024 * 1024)
 
 #ifndef CFG_TEE_LOAD_ADDR
 #define CFG_TEE_LOAD_ADDR	CFG_TEE_RAM_START
@@ -284,12 +284,25 @@
 #define CFG_TEE_RAM_START	TZDRAM_BASE
 #define CFG_TA_RAM_START	ROUNDUP(TZDRAM_BASE + CFG_TEE_RAM_VA_SIZE, \
 					SMALL_PAGE_SIZE)
+#ifdef CFG_VIRTUALIZATION
+#define CFG_WHOLE_TEE_SECURE_RAM_SIZE (TZDRAM_SIZE - CFG_TEE_SDP_MEM_TEST_SIZE)
+#define CFG_MAX_VIRT_GUESTS	3
 #endif
 
+#endif
+
+#ifndef CFG_VIRTUALIZATION
 #define CFG_TA_RAM_SIZE		ROUNDDOWN(TZDRAM_SIZE - \
 					  (CFG_TA_RAM_START - TZDRAM_BASE) - \
 					  CFG_TEE_SDP_MEM_TEST_SIZE, \
 					  SMALL_PAGE_SIZE)
+#else
+#define CFG_TA_RAM_SIZE		ROUNDDOWN((TZDRAM_SIZE -		\
+					   (CFG_TA_RAM_START - TZDRAM_BASE) - \
+					   CFG_TEE_SDP_MEM_TEST_SIZE) / \
+					  CFG_MAX_VIRT_GUESTS,		\
+					  SMALL_PAGE_SIZE)
+#endif
 
 /* Secure data path test memory pool: located at end of TA RAM */
 #if CFG_TEE_SDP_MEM_TEST_SIZE

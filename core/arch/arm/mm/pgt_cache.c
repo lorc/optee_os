@@ -65,7 +65,7 @@ static struct condvar pgt_cv = CONDVAR_INITIALIZER;
 void pgt_init(void)
 {
 	size_t n;
-
+	
 	for (n = 0; n < PGT_CACHE_SIZE; n++) {
 		struct pgt *p = pgt_entries + n;
 
@@ -108,7 +108,7 @@ void pgt_init(void)
 	static uint8_t pgt_tables[PGT_CACHE_SIZE][PGT_SIZE]
 			__aligned(PGT_SIZE) __section(".nozi.pgt_cache");
 	size_t n;
-
+	DMSG("pgt_init");
 	for (n = 0; n < ARRAY_SIZE(pgt_tables); n++) {
 		struct pgt *p = pgt_entries + n;
 

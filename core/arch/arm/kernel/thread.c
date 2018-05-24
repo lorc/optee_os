@@ -114,7 +114,7 @@ struct thread_core_local thread_core_local[CFG_TEE_CORE_NB_CORE] __kbss;
 linkage uint32_t name[num_stacks] \
 		[ROUNDUP(stack_size + STACK_CANARY_SIZE, STACK_ALIGNMENT) / \
 		sizeof(uint32_t)] \
-		__attribute__((section(".nozi_stack"), \
+		__attribute__((section(".nozi_stack." # name), \
 			       aligned(STACK_ALIGNMENT)))
 
 #define STACK_SIZE(stack) (sizeof(stack) - STACK_CANARY_SIZE / 2)
@@ -176,7 +176,7 @@ static void init_canaries(void)
 
 	INIT_CANARY(stack_tmp);
 	INIT_CANARY(stack_abt);
-#ifndef CFG_WITH_PAGER
+#if !defined(CFG_WITH_PAGER) && !defined(CFG_VIRTUALIZATION)
 	INIT_CANARY(stack_thread);
 #endif
 #endif/*CFG_WITH_STACK_CANARIES*/
@@ -207,7 +207,7 @@ void thread_check_canaries(void)
 			CANARY_DIED(stack_abt, end, n);
 
 	}
-#ifndef CFG_WITH_PAGER
+#if !defined(CFG_WITH_PAGER) && !defined(CFG_VIRTUALIZATION)
 	for (n = 0; n < ARRAY_SIZE(stack_thread); n++) {
 		if (GET_START_CANARY(stack_thread, n) != START_CANARY_VALUE)
 			CANARY_DIED(stack_thread, start, n);
@@ -404,9 +404,8 @@ static void init_regs(struct thread_ctx *thread,
 }
 #endif /*ARM64*/
 
-void thread_init_boot_thread(void)
+void thread_init_threads(void)
 {
-	struct thread_core_local *l = thread_get_core_local();
 	size_t n;
 
 	for (n = 0; n < CFG_NUM_THREADS; n++) {
@@ -415,22 +414,33 @@ void thread_init_boot_thread(void)
 		SLIST_INIT(&threads[n].tsd.pgt_cache);
 	}
 
+}
+
+void thread_init_boot_thread(void)
+{
+//	struct thread_core_local *l = thread_get_core_local();
+	size_t n;
+
+#ifndef CFG_VIRTUALIZATION
+	thread_init_threads();
+#endif
+
 	for (n = 0; n < CFG_TEE_CORE_NB_CORE; n++)
 		thread_core_local[n].curr_thread = -1;
 
-	l->curr_thread = 0;
-	threads[0].state = THREAD_STATE_ACTIVE;
+//	l->curr_thread = 0;
+//	threads[0].state = THREAD_STATE_ACTIVE;
 }
 
 void thread_clr_boot_thread(void)
 {
-	struct thread_core_local *l = thread_get_core_local();
+//	struct thread_core_local *l = thread_get_core_local();
 
-	assert(l->curr_thread >= 0 && l->curr_thread < CFG_NUM_THREADS);
-	assert(threads[l->curr_thread].state == THREAD_STATE_ACTIVE);
-	assert(TAILQ_EMPTY(&threads[l->curr_thread].mutexes));
-	threads[l->curr_thread].state = THREAD_STATE_FREE;
-	l->curr_thread = -1;
+//	assert(l->curr_thread >= 0 && l->curr_thread < CFG_NUM_THREADS);
+//	assert(threads[l->curr_thread].state == THREAD_STATE_ACTIVE);
+//	assert(TAILQ_EMPTY(&threads[l->curr_thread].mutexes));
+//	threads[l->curr_thread].state = THREAD_STATE_FREE;
+//	l->curr_thread = -1;
 }
 
 static void thread_alloc_and_run(struct thread_smc_args *args)
@@ -578,12 +588,21 @@ void thread_handle_fast_smc(struct thread_smc_args *args)
 	thread_check_canaries();
 
 #ifdef CFG_VIRTUALIZATION
-	if (!check_client(args->a7))
+	if (!virt_set_guest(args->a7)) {
+		/* FIXUP  THIS */
 		args->a0 = OPTEE_SMC_RETURN_ENOTAVAIL;
+		goto out;
+	}
 #endif
 
 	thread_fast_smc_handler_ptr(args);
+
+#ifdef CFG_VIRTUALIZATION
+	virt_unset_guest();
+#endif
 	/* Fast handlers must not unmask any exceptions */
+out:
+	__maybe_unused;
 	assert(thread_get_exceptions() == THREAD_EXCP_ALL);
 }
 
@@ -592,14 +611,21 @@ void thread_handle_std_smc(struct thread_smc_args *args)
 	thread_check_canaries();
 
 #ifdef CFG_VIRTUALIZATION
-	if (!check_client(args->a7))
+	if (!virt_set_guest(args->a7)) {
 		args->a0 = OPTEE_SMC_RETURN_ENOTAVAIL;
+		return;
+	}
 #endif
 
 	if (args->a0 == OPTEE_SMC_CALL_RETURN_FROM_RPC)
 		thread_resume_from_rpc(args);
 	else
 		thread_alloc_and_run(args);
+
+#ifdef CFG_VIRTUALIZATION
+	virt_unset_guest();
+#endif
+
 }
 
 /*
@@ -610,6 +636,9 @@ void thread_handle_std_smc(struct thread_smc_args *args)
  */
 void __weak __thread_std_smc_entry(struct thread_smc_args *args)
 {
+#ifdef CFG_VIRTUALIZATION
+	virt_on_stdcall();
+#endif
 	thread_std_smc_handler_ptr(args);
 
 	if (args->a0 == OPTEE_SMC_RETURN_OK) {
@@ -709,7 +738,9 @@ void thread_state_free(void)
 	threads[ct].state = THREAD_STATE_FREE;
 	threads[ct].flags = 0;
 	l->curr_thread = -1;
-
+#ifdef CFG_VIRTUALIZATION
+	virt_unset_guest();
+#endif
 	unlock_global();
 }
 
@@ -771,9 +802,10 @@ int thread_state_suspend(uint32_t flags, uint32_t cpsr, vaddr_t pc)
 		core_mmu_get_user_map(&threads[ct].user_map);
 		core_mmu_set_user_map(NULL);
 	}
-
 	l->curr_thread = -1;
-
+#ifdef CFG_VIRTUALIZATION
+	virt_unset_guest();
+#endif
 	unlock_global();
 
 	return ct;
@@ -927,9 +959,9 @@ void thread_init_primary(const struct thread_handlers *handlers)
 	/* Initialize canaries around the stacks */
 	init_canaries();
 
+#ifndef CFG_VIRTUALIZATION
 	init_thread_stacks();
-	pgt_init();
-
+#endif
 	init_user_kcode();
 }
 
@@ -1543,3 +1575,22 @@ void thread_rpc_free_payload(uint64_t cookie, struct mobj *mobj)
 {
 	thread_rpc_free(OPTEE_MSG_RPC_SHM_TYPE_APPL, cookie, mobj);
 }
+
+#ifdef CFG_VIRTUALIZATION
+void thread_init_guest_threads(void)
+{
+	size_t n;
+
+	init_thread_stacks();
+	pgt_init();
+
+	for (n = 0; n < CFG_NUM_THREADS; n++) {
+		TAILQ_INIT(&threads[n].mutexes);
+		TAILQ_INIT(&threads[n].tsd.sess_stack);
+		SLIST_INIT(&threads[n].tsd.pgt_cache);
+	}
+
+	for (n = 0; n < CFG_TEE_CORE_NB_CORE; n++)
+		thread_core_local[n].curr_thread = -1;
+}
+#endif

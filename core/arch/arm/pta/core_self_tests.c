@@ -508,6 +508,11 @@ static int self_test_kmalloc(void)
 
 	return ret;
 }
+#else  /* CFG_VIRTUALIZATION */
+static int self_test_kmalloc(void)
+{
+	return 0;
+}
 #endif
 /* exported entry points for some basic test */
 TEE_Result core_self_tests(uint32_t nParamTypes __unused,

@@ -185,7 +185,7 @@ static TEE_Result get_prop_tee_sys_time_prot_level(
 	return tee_svc_copy_to_user(buf, &prot, sizeof(prot));
 }
 
-static TEE_Result get_prop_client_id(struct tee_ta_session *sess __unused,
+static TEE_Result get_prop_guest_id(struct tee_ta_session *sess __unused,
 				     void *buf, size_t *blen)
 {
 	if (*blen < sizeof(TEE_Identity)) {
@@ -208,11 +208,11 @@ static TEE_Result get_prop_ta_app_id(struct tee_ta_session *sess,
 }
 
 /* Properties of the set TEE_PROPSET_CURRENT_CLIENT */
-const struct tee_props tee_propset_client[] = {
+const struct tee_props tee_propvirt_set_guest[] = {
 	{
 		.name = "gpd.client.identity",
 		.prop_type = USER_TA_PROP_TYPE_IDENTITY,
-		.get_prop_func = get_prop_client_id
+		.get_prop_func = get_prop_guest_id
 	},
 };
 
@@ -333,8 +333,8 @@ static void get_prop_set(unsigned long prop_set,
 			 size_t *vendor_size)
 {
 	if ((TEE_PropSetHandle)prop_set == TEE_PROPSET_CURRENT_CLIENT) {
-		*props = tee_propset_client;
-		*size = ARRAY_SIZE(tee_propset_client);
+		*props = tee_propvirt_set_guest;
+		*size = ARRAY_SIZE(tee_propvirt_set_guest);
 		*vendor_props = vendor_props_client.props;
 		*vendor_size = vendor_props_client.len;
 	} else if ((TEE_PropSetHandle)prop_set == TEE_PROPSET_CURRENT_TA) {

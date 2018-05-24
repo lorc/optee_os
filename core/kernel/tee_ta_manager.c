@@ -721,13 +721,14 @@ void tee_ta_push_current_session(struct tee_ta_session *sess)
 
 	TAILQ_INSERT_HEAD(&tsd->sess_stack, sess, link_tsd);
 	update_current_ctx(tsd);
+	DMSG("push %p", (void*)sess);
 }
 
 struct tee_ta_session *tee_ta_pop_current_session(void)
 {
 	struct thread_specific_data *tsd = thread_get_tsd();
 	struct tee_ta_session *s = TAILQ_FIRST(&tsd->sess_stack);
-
+	DMSG("pop  %p", (void*)s);
 	if (s) {
 		TAILQ_REMOVE(&tsd->sess_stack, s, link_tsd);
 		update_current_ctx(tsd);
@@ -754,7 +755,7 @@ struct tee_ta_session *tee_ta_get_calling_session(void)
 	return s;
 }
 
-TEE_Result tee_ta_get_client_id(TEE_Identity *id)
+TEE_Result tee_ta_get_guest_id(TEE_Identity *id)
 {
 	TEE_Result res;
 	struct tee_ta_session *sess;

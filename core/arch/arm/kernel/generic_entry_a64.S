@@ -92,8 +92,8 @@ copy_init:
 	 * Clear .bss, this code obviously depends on the linker keeping
 	 * start/end of .bss at least 8 byte aligned.
 	 */
-	adr	x0, __bss_start
-	adr	x1, __bss_end
+	ldr	x0, =__bss_start
+	ldr	x1, =__bss_end
 clear_bss:
 	str	xzr, [x0], #8
 	cmp	x0, x1
@@ -115,9 +115,9 @@ clear_kbss:
 	 * Copy .data into backup area. Linker should keep .data section
 	 * at least 8 byte aligned.
 	 */
-	adr	x0, __data_start
-	adr	x1, __data_end
-	adr	x2, __data_copy_start
+	ldr	x0, =__data_start
+	ldr	x1, =__data_end
+	ldr	x2, =__data_copy_start
 copy_data:
 	ldr	x3, [x0], #8
 	str	x3, [x2], #8

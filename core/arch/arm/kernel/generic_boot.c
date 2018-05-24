@@ -74,7 +74,7 @@ KEEP_PAGER(sem_cpu_sync);
 #endif
 
 #ifdef CFG_DT
-static void *dt_blob_addr;
+static void *dt_blob_addr __kbss;
 #endif
 
 /* May be overridden in plat-$(PLATFORM)/main.c */
@@ -418,7 +418,6 @@ static void init_runtime(unsigned long pageable_part __unused)
 	thread_init_boot_thread();
 
 	init_asan();
-	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
 
 #ifdef CFG_VIRTUALIZATION
 	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
@@ -428,7 +427,6 @@ static void init_runtime(unsigned long pageable_part __unused)
 	 * Initialized at this stage in the pager version of this function
 	 * above
 	 */
-	teecore_init_ta_ram();
 	IMSG_RAW("\n");
 }
 #endif
@@ -709,7 +707,7 @@ static struct core_mmu_phys_mem *get_memory(void *fdt, size_t *nelems)
 		return NULL;
 
 	*nelems = n;
-	mem = calloc(n, sizeof(*mem));
+	mem = kcalloc(n, sizeof(*mem));
 	if (!mem)
 		panic();
 
@@ -849,12 +847,21 @@ static void discover_nsec_memory(void)
 	/* Platform cannot define nsec_ddr && overall_ddr */
 	assert(&__start_phys_nsec_ddr_section == &__end_phys_nsec_ddr_section);
 
-	mem = calloc(nelems, sizeof(*mem));
+	mem = kcalloc(nelems, sizeof(*mem));
 	if (!mem)
 		panic();
 
 	memcpy(mem, &__start_phys_ddr_overall_section, sizeof(*mem) * nelems);
 	core_mmu_set_discovered_nsec_ddr(mem, nelems);
+}
+
+void init_tee_runtime(void)
+{
+       malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
+       teecore_init_ta_ram();
+
+       if (init_teecore() != TEE_SUCCESS)
+               panic();
 }
 
 static void init_primary_helper(unsigned long pageable_part,
@@ -883,9 +890,14 @@ static void init_primary_helper(unsigned long pageable_part,
 
 	main_init_gic();
 	init_vfp_nsec();
-	if (init_teecore() != TEE_SUCCESS)
-		panic();
+#ifndef CFG_VIRTUALIZATION
+	init_tee_runtime();
+#endif
 	reset_dt_references();
+#ifdef CFG_VIRTUALIZATION
+	IMSG("Initializing virtualization support\n");
+	core_mmu_init_virtualization();
+#endif
 	DMSG("Primary CPU switching to normal world boot\n");
 }
 

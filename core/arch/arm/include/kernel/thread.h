@@ -292,6 +292,13 @@ struct thread_core_local *thread_get_core_local(void);
 bool thread_init_stack(uint32_t stack_id, vaddr_t sp);
 
 /*
+ * Initializes thread contexts. Called in thread_init_threads() if
+ * virtualization is disabled. When virtualization is enabled
+ * it should be called manually for every new guest.
+ */
+void thread_init_threads(void);
+
+/*
  * Initializes a thread to be used during boot
  */
 void thread_init_boot_thread(void);
@@ -617,6 +624,10 @@ void thread_rpc_free_payload(uint64_t cookie, struct mobj *mobj);
  */
 uint32_t thread_rpc_cmd(uint32_t cmd, size_t num_params,
 		struct optee_msg_param *params);
+
+#ifdef CFG_VIRTUALIZATION
+void thread_init_guest_threads(void);
+#endif	/* CFG_VIRTUALIZATION */
 
 #endif /*ASM*/
 

@@ -117,6 +117,8 @@ static TEE_Result advance_to(struct elf_load_state *state, size_t offs)
 
 	if (offs > state->data_len)
 		return TEE_ERROR_SECURITY;
+	DMSG("state = %p\n", (void*)state);
+	DMSG("state->ta_store = %p\n", (void*)state->ta_store);
 
 	res = state->ta_store->read(state->ta_handle, NULL,
 				    offs - state->next_offs);

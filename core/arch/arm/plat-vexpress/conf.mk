@@ -14,6 +14,7 @@ endif
 ifeq ($(PLATFORM_FLAVOR),qemu_armv8a)
 include core/arch/arm/cpu/cortex-armv8-0.mk
 $(call force,CFG_DT,y)
+$(call force,CFG_ARM_GICV3,y)
 endif
 
 

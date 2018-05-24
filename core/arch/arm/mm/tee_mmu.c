@@ -29,9 +29,9 @@
 
 #include <arm.h>
 #include <assert.h>
-#include <bitstring.h>
 #include <kernel/panic.h>
 #include <kernel/spinlock.h>
+#include <kernel/virtualization.h>
 #include <kernel/tee_common.h>
 #include <kernel/tee_misc.h>
 #include <kernel/tlb_helpers.h>
@@ -65,18 +65,6 @@
 
 #define TEE_MMU_UCACHE_DEFAULT_ATTR	(TEE_MATTR_CACHE_CACHED << \
 					 TEE_MATTR_CACHE_SHIFT)
-
-/*
- * Two ASIDs per context, one for kernel mode and one for user mode. ASID 0
- * and 1 are reserved and not used. This means a maximum of 31 loaded user
- * mode contexts. This value can be increased but not beyond the maximum
- * ASID, which is architecture dependent (max 255 for ARMv7-A and ARMv8-A
- * Aarch32).
- */
-#define MMU_NUM_ASIDS		64
-
-static bitstr_t bit_decl(g_asid, MMU_NUM_ASIDS);
-static unsigned int g_asid_spinlock = SPINLOCK_UNLOCK;
 
 static TEE_Result tee_mmu_umap_add_param(struct tee_mmu_info *mmu,
 					 struct param_mem *mem)
@@ -188,6 +176,7 @@ static TEE_Result tee_mmu_umap_set_vas(struct tee_mmu_info *mmu)
 	assert(va);
 
 	core_mmu_get_user_va_range(&va_range_base, &va_range_size);
+
 	assert(va_range_base == mmu->ta_private_vmem_start);
 
 	/*
@@ -227,41 +216,6 @@ static TEE_Result tee_mmu_umap_set_vas(struct tee_mmu_info *mmu)
 	return TEE_SUCCESS;
 }
 
-static unsigned int asid_alloc(void)
-{
-	uint32_t exceptions = cpu_spin_lock_xsave(&g_asid_spinlock);
-	unsigned int r;
-	int i;
-
-	bit_ffc(g_asid, MMU_NUM_ASIDS, &i);
-	if (i == -1) {
-		r = 0;
-	} else {
-		bit_set(g_asid, i);
-		r = (i + 1) * 2;
-	}
-
-	cpu_spin_unlock_xrestore(&g_asid_spinlock, exceptions);
-	return r;
-}
-
-static void asid_free(unsigned int asid)
-{
-	uint32_t exceptions = cpu_spin_lock_xsave(&g_asid_spinlock);
-
-	/* Only even ASIDs are supposed to be allocated */
-	assert(!(asid & 1));
-
-	if (asid) {
-		int i = (asid - 1) / 2;
-
-		assert(i < MMU_NUM_ASIDS && bit_test(g_asid, i));
-		bit_clear(g_asid, i);
-	}
-
-	cpu_spin_unlock_xrestore(&g_asid_spinlock, exceptions);
-}
-
 TEE_Result tee_mmu_init(struct user_ta_ctx *utc)
 {
 	uint32_t asid = asid_alloc();
@@ -278,6 +232,7 @@ TEE_Result tee_mmu_init(struct user_ta_ctx *utc)
 	}
 	utc->mmu->asid = asid;
 	core_mmu_get_user_va_range(&utc->mmu->ta_private_vmem_start, NULL);
+
 	return TEE_SUCCESS;
 }
 
@@ -931,6 +886,7 @@ uintptr_t tee_mmu_get_load_addr(const struct tee_ta_ctx *const ctx)
 	const struct user_ta_ctx *utc = to_user_ta_ctx((void *)ctx);
 
 	assert(utc->mmu);
+
 	return utc->mmu->regions[TEE_MMU_UMAP_CODE_IDX].va;
 }
 
@@ -943,7 +899,11 @@ void teecore_init_ta_ram(void)
 
 	/* get virtual addr/size of RAM where TA are loaded/executedNSec
 	 * shared mem allcated from teecore */
+#ifndef CFG_VIRTUALIZATION
 	core_mmu_get_mem_by_type(MEM_AREA_TA_RAM, &s, &e);
+#else
+	virt_get_ta_ram(&s, &e);
+#endif
 	ps = virt_to_phys((void *)s);
 	pe = virt_to_phys((void *)(e - 1)) + 1;
 

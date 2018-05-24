@@ -81,13 +81,14 @@ static TEE_Result get_alloc_stats(uint32_t type, TEE_Param p[TEE_NUM_PARAMS])
 			strlcpy(stats->desc, "Secure DDR", sizeof(stats->desc));
 			break;
 
+#ifdef CFG_VIRTUALIZATION
 		case 4:
 			kmalloc_get_stats(stats);
 			strlcpy(stats->desc, "KHeap", sizeof(stats->desc));
 			if (p[0].value.b)
 				kmalloc_reset_stats();
 			break;
-
+#endif
 		default:
 			EMSG("Wrong pool id");
 			break;
