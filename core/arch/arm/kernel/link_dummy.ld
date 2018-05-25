@@ -24,6 +24,7 @@ __kbss_end = .;
 __kbss_start = .;
 __ctor_end = .;
 __ctor_list = .;
+__data_start = .;
 __data_end = .;
 __end = .;
 __end_phys_mem_map_section = .;
