@@ -291,6 +291,17 @@ static inline bool core_mmu_user_va_range_is_defined(void)
 #endif
 
 /*
+ * struct mmu_context - stores whole MMU context
+ *
+ * This is opaque struct which is defined differently for
+ * v7 and lpae MMUs
+ *
+ * This structure used mostly when virtualization is enabled.
+ * If CFG_VIRTUALIZATION==n, then only default context exists.
+ */
+struct mmu_context;
+
+/*
  * core_mmu_get_user_va_range() - Return range of user va space
  * @base:	Lowest user virtual address
  * @size:	Size in bytes of user address space
@@ -367,17 +378,20 @@ struct core_mmu_table_info {
 	unsigned level;
 	unsigned shift;
 	unsigned num_entries;
+	struct mmu_context *ctx;
 };
 
 /*
  * core_mmu_find_table() - Locates a translation table
+ * @ctx:	MMU context where search for table
  * @va:		Virtual address for the table to cover
  * @max_level:	Don't traverse beyond this level
  * @tbl_info:	Pointer to where to store properties.
  * @return true if a translation table was found, false on error
  */
-bool core_mmu_find_table(vaddr_t va, unsigned max_level,
-		struct core_mmu_table_info *tbl_info);
+bool core_mmu_find_table(struct mmu_context* ctx, vaddr_t va,
+			 unsigned max_level,
+			 struct core_mmu_table_info *tbl_info);
 
 /*
  * core_mmu_entry_to_finer_grained() - divide mapping at current level into
@@ -567,12 +581,23 @@ bool core_mmu_nsec_ddr_is_defined(void);
 void core_mmu_set_discovered_nsec_ddr(struct core_mmu_phys_mem *start,
 				      size_t nelems);
 
+/* Initialize MMU context */
+void core_init_mmu_ctx(struct mmu_context *ctx, struct tee_mmap_region *mm);
+
 unsigned int asid_alloc(void);
 void asid_free(unsigned int asid);
 
 #ifdef CFG_SECURE_DATA_PATH
 /* Alloc and fill SDP memory objects table - table is NULL terminated */
 struct mobj **core_sdp_mem_create_mobjs(void);
+#endif
+
+#ifdef CFG_VIRTUALIZATION
+size_t core_mmu_get_total_pages_size(void);
+struct mmu_context *core_alloc_mmu_ctx(void *tables);
+void core_free_mmu_ctx(struct mmu_context *ctx);
+void core_mmu_set_ctx(struct mmu_context *ctx);
+void core_mmu_set_default_ctx(void);
 #endif
 
 #endif /*ASM*/
