@@ -449,7 +449,6 @@ static void init_runtime(unsigned long pageable_part __unused)
 	thread_init_boot_thread();
 
 	init_asan();
-	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
 
 #ifdef CFG_VIRTUALIZATION
 	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
@@ -459,7 +458,6 @@ static void init_runtime(unsigned long pageable_part __unused)
 	 * Initialized at this stage in the pager version of this function
 	 * above
 	 */
-	teecore_init_ta_ram();
 	IMSG_RAW("\n");
 }
 #endif
@@ -888,6 +886,15 @@ static void discover_nsec_memory(void)
 	core_mmu_set_discovered_nsec_ddr(mem, nelems);
 }
 
+void init_tee_runtime(void)
+{
+       malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
+       teecore_init_ta_ram();
+
+       if (init_teecore() != TEE_SUCCESS)
+               panic();
+}
+
 static void init_primary_helper(unsigned long pageable_part,
 				unsigned long nsec_entry, unsigned long fdt)
 {
@@ -915,8 +922,7 @@ static void init_primary_helper(unsigned long pageable_part,
 
 	main_init_gic();
 	init_vfp_nsec();
-	if (init_teecore() != TEE_SUCCESS)
-		panic();
+	init_tee_runtime();
 	reset_dt_references();
 	DMSG("Primary CPU switching to normal world boot\n");
 }
