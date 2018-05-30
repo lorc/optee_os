@@ -446,12 +446,16 @@ static void init_runtime(unsigned long pageable_part)
 
 static void init_runtime(unsigned long pageable_part __unused)
 {
+#ifndef CFG_VIRTUALIZATION
 	thread_init_boot_thread();
+#endif
 
 	init_asan();
 
 #ifdef CFG_VIRTUALIZATION
 	kmalloc_add_pool(__kheap_start, __kheap_end - __kheap_start);
+#else
+	malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
 #endif
 
 	/*
@@ -888,7 +892,9 @@ static void discover_nsec_memory(void)
 
 void init_tee_runtime(void)
 {
+#ifdef CFG_VIRTUALIZATION
        malloc_add_pool(__heap1_start, __heap1_end - __heap1_start);
+#endif
        teecore_init_ta_ram();
 
        if (init_teecore() != TEE_SUCCESS)
@@ -922,8 +928,14 @@ static void init_primary_helper(unsigned long pageable_part,
 
 	main_init_gic();
 	init_vfp_nsec();
+#ifndef CFG_VIRTUALIZATION
 	init_tee_runtime();
+#endif
 	reset_dt_references();
+#ifdef CFG_VIRTUALIZATION
+	IMSG("Initializing virtualization support\n");
+	core_mmu_init_virtualization();
+#endif
 	DMSG("Primary CPU switching to normal world boot\n");
 }
 
