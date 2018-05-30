@@ -598,6 +598,8 @@ struct mmu_context *core_alloc_mmu_ctx(void *tables);
 void core_free_mmu_ctx(struct mmu_context *ctx);
 void core_mmu_set_ctx(struct mmu_context *ctx);
 void core_mmu_set_default_ctx(void);
+
+void core_mmu_init_virtualization(void);
 #endif
 
 #endif /*ASM*/

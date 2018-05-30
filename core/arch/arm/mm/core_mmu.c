@@ -11,6 +11,7 @@
 #include <kernel/generic_boot.h>
 #include <kernel/linker.h>
 #include <kernel/panic.h>
+#include <kernel/virtualization.h>
 #include <kernel/spinlock.h>
 #include <kernel/tlb_helpers.h>
 #include <kernel/tee_l2cc_mutex.h>
@@ -1973,3 +1974,10 @@ vaddr_t core_mmu_get_va(paddr_t pa, enum teecore_memtypes type)
 
 	return (vaddr_t)pa;
 }
+
+#ifdef CFG_VIRTUALIZATION
+void core_mmu_init_virtualization(void)
+{
+       virt_init_memory(static_memory_map);
+}
+#endif
