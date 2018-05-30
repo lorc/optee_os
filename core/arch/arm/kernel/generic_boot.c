@@ -740,7 +740,7 @@ static struct core_mmu_phys_mem *get_memory(void *fdt, size_t *nelems)
 		return NULL;
 
 	*nelems = n;
-	mem = calloc(n, sizeof(*mem));
+	mem = kcalloc(n, sizeof(*mem));
 	if (!mem)
 		panic();
 
@@ -880,7 +880,7 @@ static void discover_nsec_memory(void)
 	/* Platform cannot define nsec_ddr && overall_ddr */
 	assert(&__start_phys_nsec_ddr_section == &__end_phys_nsec_ddr_section);
 
-	mem = calloc(nelems, sizeof(*mem));
+	mem = kcalloc(nelems, sizeof(*mem));
 	if (!mem)
 		panic();
 
