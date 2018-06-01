@@ -28,6 +28,7 @@ endif
 
 $(call force,CFG_GENERIC_BOOT,y)
 $(call force,CFG_GIC,y)
+$(call force,CFG_ARM_GICV3,y)
 $(call force,CFG_PL011,y)
 $(call force,CFG_PM_STUBS,y)
 $(call force,CFG_SECURE_TIME_SOURCE_CNTPCT,y)

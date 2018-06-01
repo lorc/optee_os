@@ -151,6 +151,10 @@
 					TZDRAM_BASE))
 #endif
 
+#ifdef CFG_VIRTUALIZATION
+#define VIRT_GUEST_COUNT 3
+#endif
+
 #ifdef CFG_WITH_PAGER
 #define TEE_RAM_START		TZSRAM_BASE
 #define TEE_RAM_PH_SIZE		TZSRAM_SIZE
