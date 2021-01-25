@@ -591,6 +591,9 @@ $(call force,CFG_CORE_RWDATA_NOEXEC,y)
 
 # Default number of virtual guests
 CFG_VIRT_GUEST_COUNT ?= 2
+
+# Rigt now CFG_VIRTUALIZATION is not compatbile with core ASLR
+$(call force,CFG_CORE_ASLR,n)
 endif
 
 # Enables backwards compatible derivation of RPMB and SSK keys
