@@ -29,6 +29,7 @@
  */
 
 #include <console.h>
+#include <kernel/boot.h>
 #include <kernel/panic.h>
 #include <mm/core_memprot.h>
 #include <io.h>
@@ -36,6 +37,7 @@
 #include <stdint.h>
 #include <drivers/scif.h>
 #include <drivers/gic.h>
+#include <rng_support.h>
 
 #include "rcar.h"
 
@@ -176,4 +178,16 @@ void console_init(void)
 {
 	scif_uart_init(&console_data, CONSOLE_UART_BASE);
 	register_serial_console(&console_data.chip);
+}
+
+unsigned long get_aslr_seed(void *fdt __unused)
+{
+	unsigned long seed = 0;
+	size_t i;
+
+	/* On RCAR we can call hw_get_random_byte() on early boot stages */
+	for (i = 0; i < sizeof(seed); i++)
+		seed = (seed << 8) | hw_get_random_byte();
+
+	return seed;
 }
