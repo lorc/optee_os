@@ -6,7 +6,7 @@
 #include <kernel/boot.h>
 #include <mm/core_mmu.h>
 
-unsigned long __section(".text.dummy.get_aslr_seed")
+unsigned long __section(".text.dummy.get_aslr_seed") __weak
 get_aslr_seed(void *fdt __unused)
 {
 	return 0;
